@@ -1,0 +1,45 @@
+parameter (pair (contract %dest unit) (list %sigs (option signature)));
+storage (pair (nat %threshold) (list %keys key));
+code
+  {
+    UNPAIR ;  DIP { DUP } ; SWAP ;
+    DIP { UNPAIR @dest @sigs ; PACK ; SWAP } ;
+    UNPAIR @tresh @keys;
+    # Compute the number of valid signatures
+    DIP
+      {
+        # Running count of valid signatures
+        PUSH @valid nat 0; SWAP ;
+        ITER
+          {
+            DIP { SWAP } ; SWAP ;
+            IF_CONS
+              {
+                IF_SOME
+                  { SWAP ;
+                    DIP
+                      {
+                        SWAP ; DIIP { DIP { DUP } ; SWAP } ;
+                        # Checks signatures, fails if invalid
+                        CHECK_SIGNATURE ; ASSERT ;
+                        PUSH nat 1 ; ADD @valid } }
+                  { SWAP ; DROP }
+              }
+              {
+                # There were fewer signatures in the list
+                # than keys. Not all signatures must be present, but
+                # they should be marked as absent using the option type.
+                FAIL
+              } ;
+            SWAP
+          }
+      } ;
+    # Assert that the threshold is less than or equal to the
+    # number of valid signatures.
+    ASSERT_CMPLE ;
+    DROP ; UNPACK (contract unit); ASSERT_SOME ;
+
+    # We have now handled the signature verification part,
+    # produce the operation requested by the signers.
+    NIL operation ; SWAP ;
+    BALANCE ; UNIT ; TRANSFER_TOKENS ; CONS ; PAIR }
