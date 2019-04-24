@@ -19,7 +19,7 @@ code
                   { SWAP ;
                     DIP
                       {
-                        SWAP ; DIIP { DIP { DUP } ; SWAP } ;
+                        SWAP ; DIIP { DUUP } ;
                         # Checks signatures, fails if invalid
                         CHECK_SIGNATURE ; ASSERT ;
                         PUSH nat 1 ; ADD @valid } }
