@@ -70,7 +70,9 @@ code
         # Assert that the threshold is less than or equal to the
         # number of valid signatures.
         ASSERT_CMPLE ;
-        DROP ; DROP ;
+        # Assert no unchecked signature remains
+        IF_CONS {FAIL} {} ;
+        DROP ;
 
         # Increment counter and place in storage
         DIP { UNPAIR ; PUSH nat 1 ; ADD @new_counter ; PAIR} ;
