@@ -1,0 +1,18 @@
+# (She wrote upon it)
+
+parameter unit;
+
+storage unit;
+
+code {
+       CDR ;
+       NIL operation ;
+       SOURCE ;
+       CONTRACT unit ;
+       ASSERT_SOME ;
+       AMOUNT ;
+       UNIT ;
+       TRANSFER_TOKENS ;
+       CONS ;
+       PAIR ;
+     }
