@@ -7,12 +7,21 @@ storage unit;
 code {
        CDR ;
        NIL operation ;
-       SOURCE ;
-       CONTRACT unit ;
-       ASSERT_SOME ;
-       AMOUNT ;
-       UNIT ;
-       TRANSFER_TOKENS ;
-       CONS ;
-       PAIR ;
+       AMOUNT;
+       PUSH mutez 0;
+       IFCMPEQ
+         # Typical scenario, no operation needed
+         {
+         }
+         # Return funds if sent by mistake
+         {
+           SOURCE ;
+           CONTRACT unit ;
+           ASSERT_SOME ;
+           AMOUNT ;
+           UNIT ;
+           TRANSFER_TOKENS ;
+           CONS ;
+         };
+       PAIR;
      }
