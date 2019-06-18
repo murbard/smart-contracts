@@ -3,7 +3,7 @@ parameter (or (unit %default)
                  (pair :payload
                     (nat %counter) # counter, used to prevent replay attacks
                     (or :action    # payload to sign, represents the requested action
-                       (lambda %operation unit operation)
+                       (lambda %operation unit (list operation))
                        (pair %change_keys          # change the keys controlling the multisig
                           (nat %threshold)         # new threshold
                           (list %keys key))))     # new list of keys
@@ -79,15 +79,13 @@ code
 
         # We have now handled the signature verification part,
         # produce the operation requested by the signers.
-        NIL operation ; SWAP ;
         IF_LEFT
           { # Get operation
-            UNIT ; EXEC ; CONS
+            UNIT ; EXEC
           }
           {
             # Change set of signatures
-            DIP { SWAP ; CAR } ; SWAP ; PAIR ; SWAP
+            DIP { CAR } ; SWAP ; PAIR ; NIL operation
           };
         PAIR }
   }
-
