@@ -1,3 +1,4 @@
+# BUGGY DO NOT USE!
 parameter (pair int nat);
 storage (pair int int);
 code {
