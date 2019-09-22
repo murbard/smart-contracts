@@ -1,0 +1,7 @@
+parameter (pair int int);
+storage unit;
+code {
+       UNIT; DROP; DROP;
+
+     }
+
