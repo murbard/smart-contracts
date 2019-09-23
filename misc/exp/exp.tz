@@ -22,13 +22,13 @@ code {
      # Let's compute 2^(i)
        DUP; IFGT {PUSH @sign int 1} {PUSH @sign int -1};
        SWAP; ABS @ai; DUP;
-       DIIP { PUSH @base nat 2; PUSH @acc nat 2};
+       DIIP { PUSH @base nat 2; PUSH @acc nat 1};
        PUSH nat 0; CMPNEQ;
        LOOP
          {
            PUSH @_2 nat 2; SWAP; EDIV;
            ASSERT_SOME; UNPAIR @ai @parity;
-           DIP { PUSH @_0 nat 0; IFCMPEQ { DUUP; MUL @acc } { } ; DIP { DUP; MUL @base } };
+           DIP { PUSH @_0 nat 0; IFCMPNEQ { DUUP; MUL @acc } { } ; DIP { DUP; MUL @base } };
            DUP; PUSH nat 0; CMPNEQ;
          };
        DROP; SWAP; DROP; RENAME @_2_pow_ai;
