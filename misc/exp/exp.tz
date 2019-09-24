@@ -1,52 +1,53 @@
-# BUGGY DO NOT USE!
 parameter (pair int nat);
 storage (pair int int);
 code {
        CAR @x;
-       UNPAIR @p @q;
-       PUSH @_1649 nat 1649;
-       DUP; DIP { MUL @_1649p };
-       SWAP; DIP { SWAP; DUP; DIP { MUL @_1649q }; PUSH  @_1143 nat 1143; MUL @_1143q; DUP };
-       EDIV; ASSERT_SOME; UNPAIR @a @b;
-       DUUP; PUSH nat 2; MUL @_2b;
-       DUUUUP;
-       IFCMPGE
-         {
-           RENAME @i;
-           DIP { PUSH int 0; ADD @u; DIP { DROP; RENAME @v} }
-         }
-         {
-           PUSH nat 1; ADD @i;
-           DIP { SUB @u; DIP { RENAME @v } }
-         };
-     # Let's compute 2^(i)
-       DUP; IFGT {PUSH @sign int 1} {PUSH @sign int -1};
-       SWAP; ABS @ai; DUP;
-       DIIP { PUSH @base nat 2; PUSH @acc nat 1};
-       PUSH nat 0; CMPNEQ;
-       LOOP
-         {
-           PUSH @_2 nat 2; SWAP; EDIV;
-           ASSERT_SOME; UNPAIR @ai @parity;
-           DIP { PUSH @_0 nat 0; IFCMPNEQ { DUUP; MUL @acc } { } ; DIP { DUP; MUL @base } };
-           DUP; PUSH nat 0; CMPNEQ;
-         };
-       DROP; SWAP; DROP; RENAME @_2_pow_ai;
-       SWAP;
-       DIIP
-         {
-           DUP; DIP { SWAP; DUP; DIP { PUSH nat 6; MUL; MUL @_6uv } };
-           DUP; MUL @u2; SWAP; DUP; PUSH nat 12; MUL; MUL @_12v2;
-           ADD @u2_12v2;
-           DUUP; DUUP; ADD @num; DIP { SUB @denom };
-         };
-       IFGT
-         {
-           MUL @num;
-         }
-         {
-           SWAP; DIP { MUL @denom }
-         };
-       PAIR; NIL operation; PAIR;
+
+       LAMBDA (pair int nat) (pair int int)
+              {
+                UNPAIR @p @q;
+                PUSH @_1649 nat 1649;
+                DUP; DIP { MUL @_1649p };
+                SWAP; DIP { SWAP; DUP; DIP { MUL @_1649q }; PUSH  @_1143 nat 1143; MUL @_1143q; DUP };
+                EDIV; ASSERT_SOME; UNPAIR @a @b;
+                DUUP; PUSH nat 2; MUL @_2b;
+                DUUUUP;
+                IFCMPGE
+                  {
+                    RENAME @i;
+                    DIP { PUSH int 0; ADD @u; DIP { DROP; RENAME @v} }
+                  }
+                  {
+                    PUSH nat 1; ADD @i;
+                    DIP { SUB @u; DIP { RENAME @v } }
+                  };
+                # Let's compute 2^(i)
+                DUP; IFGT {PUSH @sign int 1} {PUSH @sign int -1};
+                SWAP; ABS @ai; DUP;
+                DIIP { PUSH @base nat 2; PUSH @acc nat 1};
+                PUSH nat 0; CMPNEQ;
+                LOOP
+                  {
+                    PUSH @_2 nat 2; SWAP; EDIV;
+                    ASSERT_SOME; UNPAIR @ai @parity;
+                    DIP { PUSH @_0 nat 0; IFCMPNEQ { DUUP; MUL @acc } { } ; DIP { DUP; MUL @base } };
+                    DUP; PUSH nat 0; CMPNEQ;
+                  };
+                DROP; SWAP; DROP; RENAME @_2_pow_ai;
+                SWAP;
+                DIIP
+                  {
+                    DUP; DIP { SWAP; DUP; DIP { PUSH nat 6; MUL; MUL @_6uv } };
+                    DUP; MUL @u2; SWAP; DUP; PUSH nat 12; MUL; MUL @_12v2;
+                    ADD @u2_12v2;
+                    DUUP; DUUP; ADD @num; DIP { SUB @denom };
+                  };
+                # Place the power of 2 either on numerator or denomintor
+                IFGT {  MUL @num; } { SWAP; DIP { MUL @denom } };
+                PAIR;
+              };
+       
+       SWAP; EXEC;
+       NIL operation; PAIR;
      }
 
