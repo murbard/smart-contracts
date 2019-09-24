@@ -5,23 +5,19 @@ code {
 
        LAMBDA (pair int nat) (pair int int)
               {
+                # Ln(2) ~ 1143 / 1649
                 UNPAIR @p @q;
                 PUSH @_1649 nat 1649;
                 DUP; DIP { MUL @_1649p };
                 SWAP; DIP { SWAP; DUP; DIP { MUL @_1649q }; PUSH  @_1143 nat 1143; MUL @_1143q; DUP };
                 EDIV; ASSERT_SOME; UNPAIR @a @b;
+                # Round to the nearest integer instead of the euclidian quotient
                 DUUP; PUSH nat 2; MUL @_2b;
                 DUUUUP;
                 IFCMPGE
-                  {
-                    RENAME @i;
-                    DIP { PUSH int 0; ADD @u; DIP { DROP; RENAME @v} }
-                  }
-                  {
-                    PUSH nat 1; ADD @i;
-                    DIP { SUB @u; DIP { RENAME @v } }
-                  };
-                # Let's compute 2^(i)
+                  { RENAME @i; DIP { PUSH int 0; ADD @u; DIP { DROP; RENAME @v} } }
+                  { PUSH nat 1; ADD @i; DIP { SUB @u; DIP { RENAME @v } } };
+                # Let's compute 2^(i) by repeated squarings
                 DUP; IFGT {PUSH @sign int 1} {PUSH @sign int -1};
                 SWAP; ABS @ai; DUP;
                 DIIP { PUSH @base nat 2; PUSH @acc nat 1};
@@ -33,8 +29,8 @@ code {
                     DIP { PUSH @_0 nat 0; IFCMPNEQ { DUUP; MUL @acc } { } ; DIP { DUP; MUL @base } };
                     DUP; PUSH nat 0; CMPNEQ;
                   };
-                DROP; SWAP; DROP; RENAME @_2_pow_ai;
-                SWAP;
+                DROP; SWAP; DROP; RENAME @_2_pow_ai; SWAP;
+                # Compute the Pade approximant
                 DIIP
                   {
                     DUP; DIP { SWAP; DUP; DIP { PUSH nat 6; MUL; MUL @_6uv } };
@@ -42,12 +38,11 @@ code {
                     ADD @u2_12v2;
                     DUUP; DUUP; ADD @num; DIP { SUB @denom };
                   };
-                # Place the power of 2 either on numerator or denomintor
+                # Place the power of 2 either on numerator or denomintor of the approximant
                 IFGT {  MUL @num; } { SWAP; DIP { MUL @denom } };
                 PAIR;
               };
-       
+
        SWAP; EXEC;
        NIL operation; PAIR;
      }
-
