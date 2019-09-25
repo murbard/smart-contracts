@@ -5,11 +5,11 @@ code {
 
        LAMBDA (pair int nat) (pair int int)
               {
-                # Ln(2) ~ 1143 / 1649
+                # Ln(2) ~ 25469 / 36744
                 UNPAIR @p @q;
-                PUSH @_1649 nat 1649;
-                DUP; DIP { MUL @_1649p };
-                SWAP; DIP { SWAP; DUP; DIP { MUL @_1649q }; PUSH  @_1143 nat 1143; MUL @_1143q; DUP };
+                PUSH @_36744 nat 36744;
+                DUP; DIP { MUL @_36744p };
+                SWAP; DIP { SWAP; DUP; DIP { MUL @_36744q }; PUSH  @_25469 nat 25469; MUL @_25469q; DUP };
                 EDIV; ASSERT_SOME; UNPAIR @a @b;
                 # Round to the nearest integer instead of the euclidian quotient
                 DUUP; PUSH nat 2; MUL @_2b;
