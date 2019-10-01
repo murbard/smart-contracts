@@ -21,7 +21,8 @@ code
                       {
                         SWAP ; DIIP { DUUP } ;
                         # Checks signatures, fails if invalid
-                        CHECK_SIGNATURE ; ASSERT ;
+                        CHECK_SIGNATURE ;
+                        IF {} {PUSH string "Invalid signature"; FAILWITH} ;
                         PUSH nat 1 ; ADD @valid } }
                   { SWAP ; DROP }
               }
@@ -29,15 +30,16 @@ code
                 # There were fewer signatures in the list
                 # than keys. Not all signatures must be present, but
                 # they should be marked as absent using the option type.
-                FAIL
+                PUSH string "Fewer signatures than keys"; FAILWITH
               } ;
             SWAP
           }
       } ;
     # Assert that the threshold is less than or equal to the
     # number of valid signatures.
-    ASSERT_CMPLE ;
-    DROP ; UNPACK (contract unit); ASSERT_SOME ;
+    IFCMPLE {} {PUSH string "Insufficient signatures"; FAILWITH} ;
+    DROP ; UNPACK (contract unit);
+    IF_SOME {} {PUSH string "Failed to unpack dest contract"; FAILWITH};
 
     # We have now handled the signature verification part,
     # produce the operation requested by the signers.
