@@ -17,3 +17,4 @@ dune-project
 
 *.rej
 *.orig
+.mutmut-cache
