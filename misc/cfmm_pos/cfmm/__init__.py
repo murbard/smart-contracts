@@ -1,8 +1,8 @@
 import math
 from collections import defaultdict
+from cfmm.data import AutoRepr
 
-
-class Tick(object):
+class Tick(AutoRepr):
     """
     An initialized tick, marking the beginning or end of a position
     """
@@ -19,7 +19,7 @@ class Tick(object):
         self.n_positions = 0
 
 
-class Position(object):
+class Position(AutoRepr):
     """
     A LP's position
     """
@@ -27,16 +27,12 @@ class Position(object):
         self.L = L
         self.feeGrowthInsideLast = XY()
 
-
-class XY(object):
+class XY(AutoRepr):
     """
     A pair of balances in asset X and Y
     """
     def __init__(self, x=0, y=0):
         self.x, self.y = x, y
-
-    def __repr__(self):
-        return (self.x, self.y).__repr__()
 
     def __add__(self, other):
         x = self.x + other.x
@@ -58,7 +54,7 @@ class XY(object):
         return isinstance(other, XY) and self.x == other.x and self.y == other.y
 
 
-class Contract(object):
+class Contract(AutoRepr):
     """
     A contract in the fashion of Uniswap v3
     """
@@ -81,7 +77,7 @@ class Contract(object):
         """
         return math.pow(math.sqrt(1.0001), tick)
 
-    def __init__(self, X=0, Y=0, fee=0.3 / 100):
+    def __init__(self, X, Y, fee=0.3 / 100):
         self.balance = XY(X, Y)
         self.srP = math.sqrt(Y / X)
         self.i_a = self.tick(self.srP)
@@ -106,7 +102,8 @@ class Contract(object):
 
         if i_next > i:
             self.ticks[i_l].i_next = i
-            self.ticks[i] = Tick(i_l, i_next, self.feeGrowth if self.i_a >= i else XY(0, 0))
+            # find an instance where i_a = i and we set XY(0, 0) and that's wrong
+            self.ticks[i] = Tick(i_l, i_next, self.feeGrowth if self.i_a >= i else XY())
             self.ticks[i_next].i_prev = i
         else:
             self.initialize_tick(i, i_next)
@@ -132,11 +129,11 @@ class Contract(object):
             self.initialize_tick(i_u, i_u_l)
 
         position_key = (user, i_l, i_u)
+        fees = self.collect_fees(user, i_l, i_u)
+
         self.positions[position_key].L += Delta_L
         assert (self.positions[position_key].L >= 0)
-        # todo, garbage collect if we are unwinding the position completely
-
-        fees = self.collect_fees(user, i_l, i_u)
+        # todo, garbage collect if we are unwinding the position completely?
 
         Delta = XY()
         # Add or remove liquidity above the current tick
@@ -173,6 +170,14 @@ class Contract(object):
         self.feeGrowth += fee * (1.0 / self.L)
         return self.X_to_Y_no_fees(Delta_X - fee.x) - fee
 
+    def Y_to_X(self, Delta_Y):
+        assert (Delta_Y >= 0)
+        # collect fee
+        fee = XY(0, Delta_Y * self.fee)
+        self.balance += fee
+        self.feeGrowth += fee * (1.0 / self.L)
+        return self.Y_to_X_no_fees(Delta_Y - fee.y) - fee
+
     def X_to_Y_no_fees(self, Delta_X):
         if self.L == 0:
             return XY()
@@ -208,13 +213,7 @@ class Contract(object):
             self.balance -= user
             return user + self.X_to_Y_no_fees(Delta_X - delta_X)
 
-    def Y_to_X(self, Delta_Y):
-        assert (Delta_Y >= 0)
-        # collect fee
-        fee = XY(0, Delta_Y * self.fee)
-        self.balance += fee
-        self.feeGrowth += fee * (1.0 / self.L)
-        return self.Y_to_X_no_fees(Delta_Y - fee.y) - fee
+
 
     def Y_to_X_no_fees(self, Delta_Y):
         assert (Delta_Y >= 0)
@@ -223,10 +222,11 @@ class Contract(object):
         srp_new = self.srP + Delta_Y / self.L
         i_u = self.ticks[self.i_l].i_next
 
-        if self.tick(srp_new) < i_u:  # we did not push past the interval
+        tick_new = self.tick(srp_new)
+        if tick_new < i_u:  # we did not push past the interval
             delta_X = - Delta_Y / (self.srP * srp_new)
             self.srP = srp_new
-            self.i_a = self.tick(self.srP)
+            self.i_a = tick_new
             user = XY(-delta_X, -Delta_Y)
             self.balance -= user
             return user
@@ -234,10 +234,13 @@ class Contract(object):
             self.i_l = i_u
             srP_u = self.srp(i_u)
             delta_X = self.L * (1 / srP_u - 1 / self.srP)
-            delta_Y = self.L * (self.srP - srP_u)
+            delta_Y = self.L * (srP_u - self.srP)
             self.L += self.ticks[i_u].Delta_L
+
+            self.ticks[i_u].feeGrowthOutside = self.feeGrowth - self.ticks[i_u].feeGrowthOutside
+
             self.i_a = i_u
-            self.srP = self.srp(i_u)
-            user = XY(delta_X, -delta_Y)
+            self.srP = srP_u
+            user = XY(-delta_X, -delta_Y)
             self.balance -= user
             return user + self.Y_to_X_no_fees(Delta_Y - delta_Y)

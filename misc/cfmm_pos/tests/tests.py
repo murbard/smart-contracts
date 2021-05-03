@@ -1,5 +1,5 @@
 import unittest
-from src import *
+from cfmm import *
 
 class TestTick(unittest.TestCase):
 
@@ -29,9 +29,6 @@ class TestXY(unittest.TestCase):
         c = XY(7 * a.x, 7 * a.y)
         self.assertEqual(a * 7, c)
 
-    def test_repr(self):
-        self.assertEqual(XY(12,-32).__repr__(), (12,-31).__repr__())
-        self.assertEqual(XY().__repr__(), (0, 0).__repr__())
 
 class TestPosition(unittest.TestCase):
     def test_init(self):
@@ -78,7 +75,11 @@ class TestContract(unittest.TestCase):
             self.assertEqual(contract.ticks[i].i_prev, i_prev)
             i_prev = i
             i = contract.ticks[i].i_next
+        self.assertEqual(contract.ticks[i].i_prev, i_prev)
         self.assertEqual(contract.ticks[i].i_next, infinity)
+
+    def test_linked_list(self):
+        return self.ticks_is_linked_list(self.contract)
 
     def test_initialize_tick(self):
         i = 0
@@ -88,6 +89,7 @@ class TestContract(unittest.TestCase):
         self.assertEqual(self.contract.ticks[0].i_prev, -self.infinity)
         self.assertEqual(self.contract.ticks[0].i_next, self.infinity)
         self.ticks_is_linked_list(self.contract)
+        self.assertRaises(AssertionError, self.contract.initialize_tick, i = -17, i_l = -17)
 
     def test_set_position(self):
         i_l, i_u = 10, 50
@@ -137,9 +139,37 @@ class TestContract(unittest.TestCase):
         self.contract.set_position("bob", i_l, -self.infinity, i_u, -self.infinity, 35)
         xy = self.contract.Y_to_X(100)
 
+    def test_fee_accounting(self):
+        i_l, i_u = -10, 10
+        initial_balance = self.contract.balance
+        alice_deposit = self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 23456)
+        user_y_to_x = self.contract.Y_to_X(3.14)
+        user_x_to_y = self.contract.X_to_Y(3.14)
+        alice_recovers = self.contract.set_position("alice", i_l, -self.infinity, i_u, i_l, -23456)
 
+        accounting = alice_recovers + user_x_to_y + user_y_to_x + alice_deposit
 
+        self.assertAlmostEqual(accounting.x, 0.0)
+        self.assertAlmostEqual(accounting.y, 0.0)
+        self.assertAlmostEqual(self.contract.balance.x, initial_balance.x)
+        self.assertAlmostEqual(self.contract.balance.y, initial_balance.y)
 
+    def test_fee_growth_logic(self):
+        i_l, i_u = -20, 20
+        initial_balance = self.contract.balance
+        alice_deposit = self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 23456)
+        user_y_to_x = self.contract.Y_to_X(3.14)
+        user_x_to_y = self.contract.X_to_Y(3.14)
+
+        bob_deposit = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, 4242)
+        t1 = self.contract.Y_to_X_no_fees(3.18)
+        t2 = self.contract.X_to_Y_no_fees(t1.x)
+        bob_recovers = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, -4242)
+        bob_total = bob_deposit + bob_recovers
+
+        self.assertAlmostEqual(bob_total.x, 0.0)
+        self.assertAlmostEqual(bob_total.y, 0.0)
+        alice_recovers = self.contract.set_position("alice", i_l, -self.infinity, i_u, i_l, -1000)
 
 if __name__ == '__main__':
     unittest.main()
