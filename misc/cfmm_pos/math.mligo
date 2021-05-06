@@ -4,10 +4,10 @@ type fixed_point : { v : nat ; offset : int }
     { v = a.v * b.v ; offset = a.offset + b.offset }
 
 
-(* fairly accurate for x/y in [0.9, 1.1] *)
+(* fairly accurate for x/y in [0.7, 1.5] *)
 let floor_log_half_bps ((x, y) : nat * nat)): nat
     let x_plus_y = x + y in
-    let num : int = 60003n * (x - y) * (x + y) in
+    let num : int = 60003n * (x - y) * x_plus_y in
     let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
     num / denom
 

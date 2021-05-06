@@ -2,6 +2,8 @@ import math
 from collections import defaultdict
 from cfmm.data import AutoRepr
 
+infinity = 10 ** 100
+
 class Tick(AutoRepr):
     """
     An initialized tick, marking the beginning or end of a position
@@ -66,7 +68,10 @@ class Contract(AutoRepr):
         :param srp: square root of a price
         :return: the closest tick below a certain price
         """
-        return math.floor(math.log(srp) / math.log(math.sqrt(1.0001)))
+        if srp == infinity:
+            return infinity
+        else:
+            return math.floor(math.log(srp) / math.log(math.sqrt(1.0001)))
 
     @staticmethod
     def srp(tick):
@@ -75,6 +80,8 @@ class Contract(AutoRepr):
         :param tick: the index of a tick
         :return: the corresponding square root price
         """
+        if tick == infinity:
+            return infinity
         return math.pow(math.sqrt(1.0001), tick)
 
     def __init__(self, X, Y, fee=0.3 / 100):
@@ -83,7 +90,6 @@ class Contract(AutoRepr):
         self.i_a = self.tick(self.srP)
         self.L = math.floor(math.sqrt(X * Y))
         self.fee = fee
-        infinity = 10 ** 100
         self.i_l = -infinity
         self.ticks = {-infinity: Tick(-infinity, infinity, XY()), infinity: Tick(-infinity, infinity, XY())}
         self.positions = defaultdict(Position)
@@ -199,29 +205,26 @@ class Contract(AutoRepr):
             # well, what delta_X would have taken me there?
             self.i_l = self.ticks[self.i_l].i_prev
             srP_l = self.srp(i_l)
-            delta_X = self.L * (1.0 / srP_l - 1.0 / self.srP)
+
             delta_Y = self.L * (srP_l - self.srP)
+            delta_X = - delta_Y / (self.srP * srP_l)
 
             # remove the liquidity we used to have
             self.L -= self.ticks[i_l].Delta_L
             # flip feeGrowth
             self.ticks[i_l].feeGrowthOutside = self.feeGrowth - self.ticks[i_l].feeGrowthOutside
-
             self.srP = self.srp(i_l) - 1e-16  # todo can we do better than this crutch?
-            self.i_a = i_l - 1
             user = XY(-delta_X, -delta_Y)
             self.balance -= user
             return user + self.X_to_Y_no_fees(Delta_X - delta_X)
-
-
 
     def Y_to_X_no_fees(self, Delta_Y):
         assert (Delta_Y >= 0)
         if self.L == 0:
             return XY()
+
         srp_new = self.srP + Delta_Y / self.L
         i_u = self.ticks[self.i_l].i_next
-
         tick_new = self.tick(srp_new)
         if tick_new < i_u:  # we did not push past the interval
             delta_X = - Delta_Y / (self.srP * srp_new)
@@ -233,13 +236,10 @@ class Contract(AutoRepr):
         else:
             self.i_l = i_u
             srP_u = self.srp(i_u)
-            delta_X = self.L * (1 / srP_u - 1 / self.srP)
             delta_Y = self.L * (srP_u - self.srP)
+            delta_X = - delta_Y / (self.srP * srP_u)
             self.L += self.ticks[i_u].Delta_L
-
             self.ticks[i_u].feeGrowthOutside = self.feeGrowth - self.ticks[i_u].feeGrowthOutside
-
-            self.i_a = i_u
             self.srP = srP_u
             user = XY(-delta_X, -delta_Y)
             self.balance -= user

@@ -1,3 +1,4 @@
+import "math.mligo"
 
 (* Some contract specific constants, to be edited per deployment *)
 [@inline] let const_tick_spacing : nat = 2n
@@ -6,15 +7,17 @@
 
 [@inline] let const_sqrt_price_2_14 : nat = 2n
 
+type position = {liquidity : nat ; feeGrowthInsideLast : nat}
+type xy = {x : nat ; y : nat}
 
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
-type tick_state = {liquidity_net : nat ; liquidity_gross : nat ; fee_growth_token : nat ; fee_growth_ctez : nat}
+type tick_state = {iPrev : int ; iNext : int ; dL : int ; feeGrowthOutside : xy ; nPos : nat}
 type tick_map = (tick_index, tick_state) big_map
 
 (* Position types, representing LP positions. *)
-type position_index = {owner : address ; i_lo : nat ; i_hi : bat}
-type position = {liquidity : nat ; fee_growth_token : nat ; fee_growth_ctez : nat}
+type position_index = {owner : address ; iLo : nat ; iHi : bat}
+type position = {liquidity : nat ; feeGrowthInsideLast : nat}
 type position_map = (position_index, position) big_map
 
 type fixed_point : { v : nat ; offset : int }
@@ -23,19 +26,12 @@ type storage_constants = {
     sqrt_price_from_log2_tick : (tick_index, fixed_point) big_map
 }
 
-[@inline] let fixed_point_mul (a : fixed_point) (b : fixed_point) : fixed_point =
-    { v = a.v * b.v ; offset = a.offset + b.offset }
-
-
-
 type storage = {
     liquidity : nat ; (* virtual liquidity, the value L for which the curve locally looks like x * y = L^2 *)
     sqrt_price : nat ; (* square root of the virtual price, the value P for which P = x / y *)
     tick : tick_index ;
-    ic : int ;(* the highest tick corresponding to a price less than or equal to sqrt_price^2, does not necessarily corresponds to a boundary *)
-
-    fee_growth_token : nat ;
-    fee_growth_ctez : nat ;
+    ic : int ; (* the highest tick corresponding to a price less than or equal to sqrt_price^2, does not necessarily corresponds to a boundary *)
+    feeGrowth : xy ;
     ticks : tick_map ;
     positions : position_map ;
 }
@@ -45,18 +41,9 @@ def assert_nat (i : int) : nat =
     | None -> failwith ("assertion error")
     | Some n -> n
 
-(* fairly accurate for x/y in [0.9, 1.1] *)
-def floor_log_half_bps ((x, y) : nat * nat)): nat
-    let x_plus_y = x + y in
-    let num : int = 60003n * (x - y) * (x + y) in
-    let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
-    num / denom
+type x_to_y_rec_no_fees_param = {s : storage ; dx : nat ; sqrt_price_new : nat ; total_dy }
 
-
-
-type ctez_to_token_rec_param = {s : storage ; dx : nat ; sqrt_price_new : nat ; total_dy }
-
-let rec ctez_to_token_rec (p : ctez_to_token_rec_param) : storage * nat =
+let rec x_to_y_rec_no_fees (p : x_to_y_rec_no_fees_param) : storage * nat =
     let s : storage = p.s in
     let dx : nat = p.dx in
     let sqrt_price_new = p.sqrt_price_new in
@@ -84,14 +71,6 @@ let rec ctez_to_token_rec (p : ctez_to_token_rec_param) : storage * nat =
         let s = {s with liquidity = liquidity_new ; ic = ic_new}
 
         ctez_to_token_rec {p with s = s ; dx = dx - filled_dx  ; total_dy = dy + total_dy}
-
-
-
-
-let ctez_to_token (s: storage) (ctez_amount : nat) (to_ : contract) : result =
-    let op_get_ctez = get_ctez ctez_amount Tezos.sender in
-    let sqrt_price_new : nat = s.liquidity * s.sqrt_price / (dx * s.sqrt_price + s.liquidity) in (* from equation 6.15 *)
-
 
 
 
