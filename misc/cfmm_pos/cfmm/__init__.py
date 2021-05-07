@@ -246,7 +246,6 @@ class Contract(AutoRepr):
             dY_, fees = tmp, XY(0, tmp - dY_)
             # update fee growth
             self.feeGrowth += fees * (1.0 / self.L)
-
             self.L += self.ticks[i_u].Delta_L
             self.ticks[i_u].feeGrowthOutside = self.feeGrowth - self.ticks[i_u].feeGrowthOutside
 
