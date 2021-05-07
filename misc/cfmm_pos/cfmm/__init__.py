@@ -168,79 +168,89 @@ class Contract(AutoRepr):
         self.balance += Delta
         return -Delta
 
-    def X_to_Y(self, Delta_X):
-        assert (Delta_X >= 0)
-        # collect fee
-        fee = XY(Delta_X * self.fee, 0)
-        self.balance += fee
-        self.feeGrowth += fee * (1.0 / self.L)
-        return self.X_to_Y_no_fees(Delta_X - fee.x) - fee
 
-    def Y_to_X(self, Delta_Y):
-        assert (Delta_Y >= 0)
-        # collect fee
-        fee = XY(0, Delta_Y * self.fee)
-        self.balance += fee
-        self.feeGrowth += fee * (1.0 / self.L)
-        return self.Y_to_X_no_fees(Delta_Y - fee.y) - fee
-
-    def X_to_Y_no_fees(self, Delta_X):
+    def X_to_Y(self, dX, fee = None):
+        # dX must be positive
+        assert(dX >= 0)
+        if fee is None:
+            fee = self.fee
+        # If there is no liquidity, stop the trade at this point
         if self.L == 0:
+            self.i_a = self.tick(self.srP) # we may need to update i_a if we went through several ticks to reach this point
             return XY()
-
-        srp_new = 1.0 / (1.0 / self.srP + Delta_X / self.L)
-
+        # Assume the trade will fit in a tick, what would the fees be like?
+        fees = XY(dX * fee, 0)
+        srp_new = 1.0 / (1.0 / self.srP + (dX - fees.x) / self.L)
         i_l = self.i_l
-
         tick_new = self.tick(srp_new)
         if tick_new >= i_l:  # we didn't pushed past the interval
-            delta_Y = - Delta_X * (self.srP * srp_new)
+            dY = - (dX - fees.x) * self.srP * srp_new
             self.srP = srp_new
             self.i_a = tick_new
-            user = XY(-Delta_X, -delta_Y)
+            user = XY(-dX, -dY)
             self.balance -= user
+            # Update fee growth with the fees we just collected
+            self.feeGrowth += fees * (1.0 / self.L)
             return user
         else:
             # compute what we got up til i_u and how much it cost
             # well, what delta_X would have taken me there?
             self.i_l = self.ticks[self.i_l].i_prev
             srP_l = self.srp(i_l)
-
-            delta_Y = self.L * (srP_l - self.srP)
-            delta_X = - delta_Y / (self.srP * srP_l)
+            dY = self.L * (srP_l - self.srP)
+            dX_ = - dY / (self.srP * srP_l)
+            tmp = dX_ / (1.0 - fee)
+            dX_, fees = tmp, XY(tmp - dX_, 0)
+            # update fee growth
+            self.feeGrowth += fees * (1.0 / self.L)
 
             # remove the liquidity we used to have
             self.L -= self.ticks[i_l].Delta_L
             # flip feeGrowth
             self.ticks[i_l].feeGrowthOutside = self.feeGrowth - self.ticks[i_l].feeGrowthOutside
             self.srP = self.srp(i_l) - 1e-16  # todo can we do better than this crutch?
-            user = XY(-delta_X, -delta_Y)
+            user = XY(-dX_, -dY)
             self.balance -= user
-            return user + self.X_to_Y_no_fees(Delta_X - delta_X)
+            return user + self.X_to_Y(dX - dX_, fee)
 
-    def Y_to_X_no_fees(self, Delta_Y):
-        assert (Delta_Y >= 0)
+    def Y_to_X(self, dY, fee = None):
+        # dY must be positive
+        assert (dY >= 0)
+        if fee is None:
+            fee = self.fee
+        # If there is no liquidity, stop the trade at this point
         if self.L == 0:
+            self.i_a = self.tick(self.srP)  # we may need to update i_a if we went through several ticks to reach this point
             return XY()
-
-        srp_new = self.srP + Delta_Y / self.L
+        # Assume the trade will fit in a tick, what would the fees be like?
+        fees = XY(0, dY * fee)
+        srp_new = self.srP + (dY - fees.y) / self.L
         i_u = self.ticks[self.i_l].i_next
         tick_new = self.tick(srp_new)
+
         if tick_new < i_u:  # we did not push past the interval
-            delta_X = - Delta_Y / (self.srP * srp_new)
+            dX = - (dY - fees.y) / (self.srP * srp_new)
             self.srP = srp_new
             self.i_a = tick_new
-            user = XY(-delta_X, -Delta_Y)
+            user = XY(-dX, -dY)
             self.balance -= user
+            # Update fee growth with the fees we just collected
+            self.feeGrowth += fees * (1.0 / self.L)
             return user
         else:
             self.i_l = i_u
             srP_u = self.srp(i_u)
-            delta_Y = self.L * (srP_u - self.srP)
-            delta_X = - delta_Y / (self.srP * srP_u)
+            dY_ = self.L * (srP_u - self.srP)
+            dX = - dY_ / (self.srP * srP_u)
+            tmp = dY_ / (1.0 - fee)
+            dY_, fees = tmp, XY(0, tmp - dY_)
+            # update fee growth
+            self.feeGrowth += fees * (1.0 / self.L)
+
             self.L += self.ticks[i_u].Delta_L
             self.ticks[i_u].feeGrowthOutside = self.feeGrowth - self.ticks[i_u].feeGrowthOutside
+
             self.srP = srP_u
-            user = XY(-delta_X, -delta_Y)
+            user = XY(-dX, -dY_)
             self.balance -= user
-            return user + self.Y_to_X_no_fees(Delta_Y - delta_Y)
+            return user + self.Y_to_X(dY - dY_, fee)

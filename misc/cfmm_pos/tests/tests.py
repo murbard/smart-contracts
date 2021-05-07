@@ -1,6 +1,7 @@
 import unittest
 from cfmm import *
 
+
 class TestTick(unittest.TestCase):
 
     def test_init(self):
@@ -17,7 +18,7 @@ class TestXY(unittest.TestCase):
         a = XY(3, 6)
         b = XY(4, -2)
         self.assertNotEqual(a, b)
-        self.assertNotEqual(XY(1,2), XY(1,5))
+        self.assertNotEqual(XY(1, 2), XY(1, 5))
         self.assertNotEqual(XY(1, 2), XY(3, 2))
         self.assertEqual(a, XY(a.x, a.y))
         c = XY(a.x + b.x, a.y + b.y)
@@ -35,6 +36,7 @@ class TestPosition(unittest.TestCase):
         p = Position()
         self.assertEqual(p.L, 0)
 
+
 class TestContract(unittest.TestCase):
 
     def setUp(self):
@@ -43,7 +45,7 @@ class TestContract(unittest.TestCase):
 
     def test_init(self):
         X, Y, fee = 10, 50, 0.25 / 100
-        contract = Contract(X = X, Y = Y, fee = fee)
+        contract = Contract(X=X, Y=Y, fee=fee)
         self.assertEqual(contract.balance, XY(X, Y))
         self.assertEqual(contract.balance.x, X)
         self.assertEqual(contract.balance.y, Y)
@@ -54,11 +56,11 @@ class TestContract(unittest.TestCase):
         self.assertEqual(contract.feeGrowth, XY(0, 0))
 
     def test_tick(self):
-        #self.subTest(i=0)
-        self.assertEqual(Contract.tick(2.71814592682),20000)
-        #self.subTest(i=1)
+        # self.subTest(i=0)
+        self.assertEqual(Contract.tick(2.71814592682), 20000)
+        # self.subTest(i=1)
         self.assertEqual(Contract.tick(2.71814592681), 19999)
-        #self.subTest(i=2)
+        # self.subTest(i=2)
         self.assertEqual(Contract.tick(0.99), -202)
         self.assertEqual(Contract.tick(1), 0)
 
@@ -79,12 +81,14 @@ class TestContract(unittest.TestCase):
         self.assertEqual(contract.ticks[i].i_next, infinity)
 
     def feegrowth_coherent(self):
+        print("\n\n")
         fees = XY()
-        for i, tick in self.contract.ticks.items():
+        for i, tick in sorted(self.contract.ticks.items()):
             next_tick = self.contract.ticks[tick.i_next]
             fa = self.contract.feeGrowth - next_tick.feeGrowthOutside if self.contract.i_a >= tick.i_next else next_tick.feeGrowthOutside
             fb = tick.feeGrowthOutside if self.contract.i_a >= i else self.contract.feeGrowth - tick.feeGrowthOutside
             fee = self.contract.feeGrowth - fa - fb
+            print(i, tick.i_next, fee)
             fees += fee
 
         expected_fees = self.contract.feeGrowth
@@ -102,7 +106,7 @@ class TestContract(unittest.TestCase):
         self.assertEqual(self.contract.ticks[0].i_prev, -self.infinity)
         self.assertEqual(self.contract.ticks[0].i_next, self.infinity)
         self.ticks_is_linked_list(self.contract)
-        self.assertRaises(AssertionError, self.contract.initialize_tick, i = -17, i_l = -17)
+        self.assertRaises(AssertionError, self.contract.initialize_tick, i=-17, i_l=-17)
         # todo store corresponding square root price
 
     def test_set_position(self):
@@ -129,31 +133,38 @@ class TestContract(unittest.TestCase):
         i_l, i_u = -50, 50
         self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 4321)
         self.assertEqual(self.contract.L, 4321)
-        xy = self.contract.X_to_Y_no_fees(10)
+        xy = self.contract.X_to_Y(10, fee=0.0)
         self.assertEqual(xy.x, -10)
         self.assertLess(xy.y, -xy.x)
-        xy = self.contract.X_to_Y_no_fees(10)
+        xy = self.contract.X_to_Y(10, fee=0.0)
         self.assertLessEqual(self.contract.balance.y, 1e-4)
         self.assertLess(-xy.x, 10)
 
     def test_X_to_Y_fees(self):
         i_l, i_u = -30, 30
-        self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 10**15)
+        self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 10 ** 15)
         xy = self.contract.X_to_Y(1)
-        self.assertAlmostEqual(xy.y, 1.0 * (1 - 0.3/100))
+        self.assertAlmostEqual(xy.y, 1.0 * (1 - 0.3 / 100))
         self.feegrowth_coherent()
 
     def test_Y_to_X_fees(self):
         i_l, i_u = -30, 30
         self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 10 ** 15)
         xy = self.contract.Y_to_X(2)
-        self.assertAlmostEqual(xy.x, 2.0 * (1 - 0.3/100))
+        self.assertAlmostEqual(xy.x, 2.0 * (1 - 0.3 / 100))
         self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, -10 ** 15)
         self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 47)
         i_l, i_u = -37, 10
         self.contract.set_position("bob", i_l, -self.infinity, i_u, -self.infinity, 35)
-        xy = self.contract.Y_to_X(100)
+        self.contract.Y_to_X(100)
+        # churn
+        for i in range(200):
+            self.contract.X_to_Y(50)
+            self.contract.Y_to_X(50)
+
+        xy = self.contract.X_to_Y(100)
         self.feegrowth_coherent()
+        print("foo")
 
     def test_fee_accounting(self):
         i_l, i_u = -10, 10
@@ -173,7 +184,6 @@ class TestContract(unittest.TestCase):
         self.assertAlmostEqual(self.contract.balance.x, initial_balance.x)
         self.assertAlmostEqual(self.contract.balance.y, initial_balance.y)
 
-
     def test_fee_growth_logic(self):
         i_l, i_u = -20, 20
         initial_balance = self.contract.balance
@@ -186,9 +196,9 @@ class TestContract(unittest.TestCase):
 
         bob_deposit = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, 4242)
         self.feegrowth_coherent()
-        t1 = self.contract.Y_to_X_no_fees(3.18)
+        t1 = self.contract.Y_to_X(3.18, fee=0.0)
         self.feegrowth_coherent()
-        t2 = self.contract.X_to_Y_no_fees(t1.x)
+        t2 = self.contract.X_to_Y(t1.x, fee=0.0)
         self.feegrowth_coherent()
         bob_recovers = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, -4242)
         self.feegrowth_coherent()
@@ -198,8 +208,8 @@ class TestContract(unittest.TestCase):
         self.assertAlmostEqual(bob_total.y, 0.0)
 
         bob_deposit = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, 4242)
-        t1 = self.contract.X_to_Y_no_fees(3.18)
-        t2 = self.contract.Y_to_X_no_fees(t1.y)
+        t1 = self.contract.X_to_Y(3.18, fee=0.0)
+        t2 = self.contract.Y_to_X(t1.y, fee=0.0)
         bob_recovers = self.contract.set_position("bob", -1, -self.infinity, 1, -self.infinity, -4242)
         bob_total = bob_deposit + bob_recovers
 
@@ -226,33 +236,27 @@ class TestContract(unittest.TestCase):
         self.contract.set_position("Golf", 900, -self.infinity, self.infinity, -self.infinity, 4200)
 
         k = self.contract.balance.x * self.contract.balance.y
-        for trade in [100, -50, 200, -30, 45.3, 12.5, -200, 1000, -800, 300, 531,-1000,-2000,8765]:
+        for trade in [100, -50, 200, -30, 45.3, 12.5, -200, 1000, -800, 300, 531, -1000, -2000, 8765]:
             if trade > 0:
-                self.contract.X_to_Y_no_fees(trade)
+                self.contract.X_to_Y(trade, fee=0.0)
             else:
-                self.contract.Y_to_X_no_fees(-trade)
-            new_k =  self.contract.balance.x * self.contract.balance.y
-            print("i_a = ", self.contract.i_a)
-            self.contract.set_position("Alice+", 0, -self.infinity, self.infinity, -self.infinity, -321)
-            self.contract.set_position("Alice-", -self.infinity, -self.infinity, 0, -self.infinity, -321)
-            self.contract.set_position("Alice+", 0, -self.infinity, self.infinity, -self.infinity, 321)
-            self.contract.set_position("Alice-", -self.infinity, -self.infinity, 0, -self.infinity, 321)
-
+                self.contract.Y_to_X(-trade, fee=0.0)
+            new_k = self.contract.balance.x * self.contract.balance.y
+            print("i_a = ", self.contract.i_a, ", bal = ", self.contract.balance, " k = ", new_k)
+#            self.contract.set_position("Alice+", 0, -self.infinity, self.infinity, -self.infinity, -321)
+#            self.contract.set_position("Alice-", -self.infinity, -self.infinity, 0, -self.infinity, -321)
+#            self.contract.set_position("Alice+", 0, -self.infinity, self.infinity, -self.infinity, 321)
+#            self.contract.set_position("Alice-", -self.infinity, -self.infinity, 0, -self.infinity, 321)
+            if abs(new_k / k - 1) > 1e-6:
+                print('boo')
             self.assertLess(abs(new_k / k - 1), 1e-6)
 
     def test_srp_compute(self):
         self.assertEqual(Contract.srp(-self.infinity), 0)
         self.assertEqual(Contract.srp(self.infinity), self.infinity)
         for tick in [-100, -10, 1000, 324, 193, -230, 1, -1, 0, 10, 42, -591]:
-            self.assertAlmostEqual(Contract.srp(tick)**2, 1.0001**tick)
-
-
-
-
-
+            self.assertAlmostEqual(Contract.srp(tick) ** 2, 1.0001 ** tick)
 
 
 if __name__ == '__main__':
     unittest.main()
-
-
