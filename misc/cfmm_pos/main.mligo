@@ -11,7 +11,7 @@
  todo implement burn [@inline] let const_ctez_burn_fee_bps : nat = 5n *)
 
 [@inline] let const_fee_bps : nat = 10n  (* CHANGEME *)
-
+[@inline] let const_one_minus_fee_bps : nat = 9990n (* CHANGEME *)
 
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
@@ -66,8 +66,8 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
         (* The what the new price will be, assuming it's within the current tick. *)
         let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (assert_nat (p.dx - fee)) * p.s.sqrt_price) in
         (* What the new value of ic will be. *)
-        let i_c_new = assert_nat (p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price)) in
-        if i_c_new >= p.s.tick.i then
+        let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in
+        if i_c_new >= p.s.lo.i then
             (* The trade did not push us past the current tick. *)
             let dy = (sqrt_price_new - s.sqrt_price) * s.liquidity in
             let s_new = {p.s with
@@ -84,17 +84,18 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
             (* The cached price corresponding to lo. *)
             let sqrt_price_new = tick.sqrt_price in
             (* How much dY will we receive for going all the way to lo. *)
-            let dy = p.s.liquidty * (p.s.sqrt_price - sqrt_price_new) in
+            let dy = p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new)) in
             (* How much dX does that correspond to. *)
             let dx_for_dy = dy / (p.s.sqrt_price * sqrt_price_new) in
             (* We will have to consumme more dx than that because a fee will be applied. *)
-            let dx_consummed = ceildiv (dx_for_dy * 10000n) (10000n - const_fee_bps) in
+            let dx_consummed = ceildiv (dx_for_dy * 10000n) const_one_minus_fee_bps in
             (* Deduct the fee we will actually be paying. *)
             let fee = assert_nat (dx_consummed - dx_for_dy) in
-            let fee_growth_new = p.s.fee_growth + fee / p.s.liquidity in
+            let fee_growth_x_new = p.s.fee_growth.x + (floordiv fee p.s.liquidity) in
             (* Flip fee growth. *)
-            let tick_new = {tick with fee_growth_outside = asset_nat (fee_growth_new - ticks.fee_growth_outside)} in
-            let ticks_new = Big_map.update p.s.lo tick_new p.s.ticks  in
+            let fee_growth_outside_new = {tick.fee_growth_outside with x = assert_nat (fee_growth_x_new - tick.fee_growth_outside.x)} in
+            let tick_new = {tick with fee_growth_outside = fee_growth_outside_new} in
+            let ticks_new = Big_map.update p.s.lo (Some tick_new) p.s.ticks  in
             (* Update global state. *)
             let s_new = {p.s with
                 sqrt_price = sqrt_price_new ;
