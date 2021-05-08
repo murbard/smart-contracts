@@ -4,15 +4,31 @@ type fixed_point = { v : nat ; offset : int }
     { v = a.v * b.v ; offset = a.offset + b.offset }
 
 
+let ceildiv (numerator : nat) (denominator : nat) : nat = abs ((- numerator) / (int denominator))
+let floordiv (numerator : nat) (denominator : nat) : nat =  numerator / denominator
+
 (* accurate for x/y in [0.7, 1.5] *)
-let floor_log_half_bps ((x, y) : nat * nat) : nat =
+let floor_log_half_bps ((x, y) : nat * nat) : int =
+    let tenx = 10n * x in
     if tenx < 7n * y or tenx > 15n * y then
-        (failwith "Log out of bounds" : nat)
+        (failwith "Log out of bounds" : int)
     else
         let x_plus_y = x + y in
-        let num : int = 60003n * (x - y) * x_plus_y in
+        let num : int = 60003 * (x - y) * (int x_plus_y) in
         let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
-        num / denom
+        num / (int denom)
+
+
+let assert_nat (x : int) : nat =
+    match is_nat x with
+    | None -> (failwith "x should be positive" : nat)
+    | Some n -> n
+
+let half_bps_pow (tick : int) : nat=
+    (* let leading = Bitwise.shift_right tick 8n;
+    let approx = Map.get leading lookup; *)
+    (failwith "not implemented" : nat)
+
 
 (* tick is going to be between -2^12 and 2^12,
    if we shift the tick by 8, we can have 16 possible
@@ -21,11 +37,6 @@ let floor_log_half_bps ((x, y) : nat * nat) : nat =
    so a single refinement through a taylor approximation gives us an
    excellent result *)
 
-
-
-let half_bps_pow (tick : int) =
-    let leading = Bitwise.shift_right tick 8n;
-    let approx = Map.get leading lookup;
 
 (*
 

@@ -49,7 +49,7 @@ type result = storage * (operation list)
 
 (* Helper function to grab a tick we know exists in the tick indexed state. *)
 let get_tick (ticks : (tick_index, tick_state) big_map) (index: tick_index) : tick_state =
-    match Big_map.find_opt tick_index ticks with
+    match Big_map.find_opt index ticks with
     | None -> failwith "Assertion error, tick should be initialized"
     | Some state -> state
 
@@ -58,13 +58,13 @@ type x_to_y_rec_param = {s : storage ; dx : nat ; dy : nat}
 
 (* Helper function for x_to_y, recursively loops over ticks to execute a trade. *)
 let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
-    if p.s.liquidity = 0 then
+    if p.s.liquidity = 0n then
         p
     else
         (* The fee that would be extracted from selling dx. *)
         let fee  = ceildiv (p.dx * const_fee_bps) 10000n in
         (* The what the new price will be, assuming it's within the current tick. *)
-        let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (p.dx - fee) * p.s.sqrt_price) in
+        let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (assert_nat (p.dx - fee)) * p.s.sqrt_price) in
         (* What the new value of ic will be. *)
         let i_c_new = assert_nat (p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price)) in
         if i_c_new >= p.s.tick.i then
@@ -190,7 +190,7 @@ let set_position (s : storage) (i_l : nat) (i_u : nat) (i_l_l : nat) (i_u_l : na
             ticks) in
     let position_entry = if liquidity_new = 0n then None else Some {position with liquidity = liquidity_new} in
     let positions = Big_map.update position_key position_entry s.positions in
-    (* Compute how much should be deposited / withdrawn to change liquidity by delta_liquidity * )
+    (* Compute how much should be deposited / withdrawn to change liquidity by delta_liquidity *)
 
     (* Add or remove liquidity above the current tick *)
     let (s, delta) =
