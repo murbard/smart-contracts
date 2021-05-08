@@ -3,7 +3,6 @@ type fixed_point = { v : nat ; offset : int }
 [@inline] let fixed_point_mul (a : fixed_point) (b : fixed_point) : fixed_point =
     { v = a.v * b.v ; offset = a.offset + b.offset }
 
-
 let ceildiv (numerator : nat) (denominator : nat) : nat = abs ((- numerator) / (int denominator))
 let floordiv (numerator : nat) (denominator : nat) : nat =  numerator / denominator
 
@@ -45,8 +44,8 @@ let positive_ladder = [
     {v=32025492072892644517427309;offset=-80};
     {v=53023938993515524338629870;offset=-76};
     {v=36338278329035183585718600;offset=-66};
-    {v=34133361681864713959105863;offset=-47};
-    {v=30116777038798852995368017;offset=-9}] (* 2^20 *)
+    {v=34133361681864713959105863;offset=-47}]
+    (* {v=30116777038798852995368017;offset=-9}]  2^20  *)
 
 let negative_ladder = [
     {v=19341845997356488514015570;offset=-84}; (* -2^0 *)
@@ -68,20 +67,26 @@ let negative_ladder = [
     {v=11682706336100247487260846;offset=-88};
     {v=56449132412055094618915006;offset=-95};
     {v=20592303012757789234393034;offset=-103};
-    {v=1370156647050591448120178;offset=-118};
-    {v=24846245577653162038756966;offset=-160}] (* -2^20 *)
+    {v=1370156647050591448120178;offset=-118}]
+    (* {v=24846245577653162038756966;offset=-160} : 2^20 *)
 
-let half_bps_pow (tick : nat) : nat=
-    pass
+let half_bps_pow (tick : int) : nat=
+    let product = half_bps_pow_rec (abs tick, {v=0;offset=0}, (if ticks > 0  then positive_ladder  else negative_ladder)) in
+    let doffset = -80 - offset in
+    if doffset > 0 then
+        Bitwise.shift_right product.v (abs doffset)
+    else
+        (* This branch should almost never happen, in general the price we get is not a round number. *)
+        Bitwise.shift_left product.v (abs doffset) (*TODO, do we need to round when we divide here? *)
 
-let rec half_bps_pow_rec (tick, acc, ladder) : nat * nat) : nat=
+let rec half_bps_pow_rec ((tick, acc, ladder) : nat * fixed_point * (fixed_point list)) : nat=
     if tick = 0n then
         acc
     else
         let b = tick mod 2n in
         match ladder with
-        | [] -> acc
-        | h :: t -> half_bps_pow_rec (tick / 2, {v = h.v * acc.v  ; offset = h.offset + acc.offset}, t)
+        | [] -> (failwith "should not reach end of ladder" : fixed_point)
+        | h :: t -> half_bps_pow_rec (tick / 2n, fixed_point_mul v acc, t)
 
 
 (* ladder explanation
