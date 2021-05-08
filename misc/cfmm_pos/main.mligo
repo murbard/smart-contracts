@@ -64,12 +64,12 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
         (* The fee that would be extracted from selling dx. *)
         let fee  = ceildiv (p.dx * const_fee_bps) 10000n in
         (* The what the new price will be, assuming it's within the current tick. *)
-        let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (assert_nat (p.dx - fee)) * p.s.sqrt_price) in
+        let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (assert_nat (p.dx - fee)) * p.s.sqrt_price) in (* FIXME arithmetic *)
         (* What the new value of ic will be. *)
-        let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in
+        let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in (* FIXME arithmetic *)
         if i_c_new >= p.s.lo.i then
             (* The trade did not push us past the current tick. *)
-            let dy = (sqrt_price_new - s.sqrt_price) * s.liquidity in
+            let dy = (sqrt_price_new - s.sqrt_price) * s.liquidity in (* FIXME arithmetic *)
             let s_new = {p.s with
                 sqrt_price = sqrt_price_new ;
                 i_c = i_c_new ;
@@ -84,14 +84,14 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
             (* The cached price corresponding to lo. *)
             let sqrt_price_new = tick.sqrt_price in
             (* How much dY will we receive for going all the way to lo. *)
-            let dy = p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new)) in
+            let dy = p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new)) in (* FIXME arithmetic *)
             (* How much dX does that correspond to. *)
-            let dx_for_dy = dy / (p.s.sqrt_price * sqrt_price_new) in
+            let dx_for_dy = dy / (p.s.sqrt_price * sqrt_price_new) in (* FIXME arithmetic *)
             (* We will have to consumme more dx than that because a fee will be applied. *)
             let dx_consummed = ceildiv (dx_for_dy * 10000n) const_one_minus_fee_bps in
             (* Deduct the fee we will actually be paying. *)
             let fee = assert_nat (dx_consummed - dx_for_dy) in
-            let fee_growth_x_new = p.s.fee_growth.x + (floordiv fee p.s.liquidity) in
+            let fee_growth_x_new = p.s.fee_growth.x + (floordiv fee p.s.liquidity) in (* FIXME arithmetic *)
             (* Flip fee growth. *)
             let fee_growth_outside_new = {tick.fee_growth_outside with x = assert_nat (fee_growth_x_new - tick.fee_growth_outside.x)} in
             let tick_new = {tick with fee_growth_outside = fee_growth_outside_new} in
@@ -196,13 +196,13 @@ let set_position (s : storage) (i_l : nat) (i_u : nat) (i_l_l : nat) (i_u_l : na
     (* Add or remove liquidity above the current tick *)
     let (s, delta) =
     if s.i_c < i_l then
-        (s, {x = delta_liquidity  * (srp_u - srp_l) / (srp_l * srp_u) ; y = 0})
+        (s, {x = delta_liquidity  * (srp_u - srp_l) / (srp_l * srp_u) ; y = 0}) (* FIXME arithmetic *)
     else if i_l <= s.i_c and s.i_c < i_u then
         (* update interval we are in, if need be ... *)
         let s = {s with i_l = if i_l > s.i_l then i_l else s.i_l ; liquidity = liquidity + delta_liquidity} in
-        (s, {x = delta_liquidity * (srp_u - srp) / (srp * srp_u) ; y = delta_liquidity * (srp - srp_l)})
+        (s, {x = delta_liquidity * (srp_u - srp) / (srp * srp_u) ; y = delta_liquidity * (srp - srp_l)}) (* FIXME arithmetic *)
     else (* i_c >= i_u *)
-        (s, {x = 0 ; y = delta_liquidity ; y = delta_liquidity * (srp_u - srp_l)}) in
+        (s, {x = 0 ; y = delta_liquidity ; y = delta_liquidity * (srp_u - srp_l)}) in (* FIXME arithmetic *)
 
     (* Collect fees to increase withdrawal or reduce required deposit. *)
     let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in
