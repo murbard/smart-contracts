@@ -153,18 +153,19 @@ class TestContract(unittest.TestCase):
         xy = self.contract.Y_to_X(2)
         self.assertAlmostEqual(xy.x, 2.0 * (1 - 0.3 / 100))
         self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, -10 ** 15)
-        self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 47)
-        i_l, i_u = -37, 10
-        self.contract.set_position("bob", i_l, -self.infinity, i_u, -self.infinity, 35)
-        self.contract.Y_to_X(100)
+        self.contract.set_position("alice", i_l, -self.infinity, i_u, -self.infinity, 470)
+        i_l, i_u = 30, 307
+        bob_deposit = self.contract.set_position("bob", i_l, -self.infinity, i_u, -self.infinity, 3500)
+        self.contract.Y_to_X(10)
         # churn
-        for i in range(200):
-            self.contract.X_to_Y(50)
-            self.contract.Y_to_X(50)
+        for i in range(1000):
+            self.contract.X_to_Y(5)
+            self.contract.Y_to_X(5)
 
-        xy = self.contract.X_to_Y(100)
-        self.feegrowth_coherent()
-        print("foo")
+        xy = self.contract.X_to_Y(10)
+        bob_withdrawal = self.contract.set_position("bob", i_l, -self.infinity, i_u, -self.infinity, -3500)
+        bob_total = bob_deposit + bob_withdrawal
+        self.assertGreater(bob_total.x, 3)
 
     def test_fee_accounting(self):
         i_l, i_u = -10, 10
@@ -231,9 +232,9 @@ class TestContract(unittest.TestCase):
         self.contract.set_position("Echo", -500, -self.infinity, 0, -self.infinity, 2100)
         self.contract.set_position("Foxtrot", 0, -self.infinity, 666, -self.infinity, 1000)
         self.contract.set_position("Golf", 0, -self.infinity, 333, -self.infinity, 3200)
-        self.contract.set_position("Golf", 333, -self.infinity, 900, -self.infinity, 3200)
-        self.contract.set_position("Golf", 666, -self.infinity, 900, -self.infinity, 1000)
-        self.contract.set_position("Golf", 900, -self.infinity, self.infinity, -self.infinity, 4200)
+        self.contract.set_position("Hotel", 333, -self.infinity, 900, -self.infinity, 3200)
+        self.contract.set_position("India", 666, -self.infinity, 900, -self.infinity, 1000)
+        self.contract.set_position("Juliet", 900, -self.infinity, self.infinity, -self.infinity, 4200)
 
         k = self.contract.balance.x * self.contract.balance.y
         for trade in [100, -50, 200, -30, 45.3, 12.5, -200, 1000, -800, 300, 531, -1000, -2000, 8765]:

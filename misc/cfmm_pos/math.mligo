@@ -1,15 +1,18 @@
-type fixed_point : { v : nat ; offset : int }
+type fixed_point = { v : nat ; offset : int }
 
 [@inline] let fixed_point_mul (a : fixed_point) (b : fixed_point) : fixed_point =
     { v = a.v * b.v ; offset = a.offset + b.offset }
 
 
-(* fairly accurate for x/y in [0.7, 1.5] *)
-let floor_log_half_bps ((x, y) : nat * nat)): nat
-    let x_plus_y = x + y in
-    let num : int = 60003n * (x - y) * x_plus_y in
-    let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
-    num / denom
+(* accurate for x/y in [0.7, 1.5] *)
+let floor_log_half_bps ((x, y) : nat * nat) : nat =
+    if tenx < 7n * y or tenx > 15n * y then
+        (failwith "Log out of bounds" : nat)
+    else
+        let x_plus_y = x + y in
+        let num : int = 60003n * (x - y) * x_plus_y in
+        let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
+        num / denom
 
 (* tick is going to be between -2^12 and 2^12,
    if we shift the tick by 8, we can have 16 possible
