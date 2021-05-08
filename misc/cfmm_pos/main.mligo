@@ -1,6 +1,7 @@
 (* Some contract specific constants, to be edited per deployment
  todo implement burn [@inline] let const_ctez_burn_fee_bps : nat = 5n *)
 [@inline] let const_fee_bps : nat = 10n
+[@inline] let const_infinity : nat = 1000000000n
 
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
@@ -17,7 +18,7 @@ type tick_map = (tick_index, tick_state) big_map
 
 (* Position types, representing LP positions. *)
 type position_index = {owner : address ; lo : tick_index ; hi : tick_index}
-type position = {liquidity : nat ; fee_growth : nat_balance}
+type position = {liquidity : nat ; fee_growth_inside : nat_balance ; fee_growth_inside_last : nat_balance}
 type position_map = (position_index, position) big_map
 
 type storage = {
@@ -117,23 +118,65 @@ let rec initialize_tick ((ticks, i, i_l, initial_fee_growth_outside) : tick_map 
         else
             initialize_tick (ticks, i, i_next)
 
-let set_position (storage : s) (i_l : nat) (i_u : nat) (i_l_l : nat) (i_u_l : nat) =
+let incr_n_positions (ticks : tick_map) (i : tick_index) (incr : int) =
+    let tick = get_tick ticks i in
+    let n_pos = assert_nat (tick.n_positions + incr) in
+    let tick = if pos = 0n then None else Some {tick with n_positions = n_pos} in
+    (*TODO, repair linked list *)
+    Big_map.update i tick ticks
+
+let set_position (s : storage) (i_l : nat) (i_u : nat) (i_l_l : nat) (i_u_l : nat) (delta_liquity : int) : result =
     (* Initialize ticks if need be. *)
     let ticks = s.ticks in
-    let ticks = initialize_tick (ticks, i_l, i_l_l, if s.i_c >= i_l then s.fee_growth else {x = 0n ; y = 0n}) in
-    let ticks = initialize_tick (ticks, i_u, i_u_l, if s.i_c >= i_u then s.fee_growth else {x = 0n ; y = 0n}) in
+    let ticks = initialize_tick (ticks, i_l, i_l_l, (if s.i_c >= i_l then s.fee_growth else {x = 0n ; y = 0n})) in
+    let ticks = initialize_tick (ticks, i_u, i_u_l, (if s.i_c >= i_u then s.fee_growth else {x = 0n ; y = 0n})) in
     (* Form position key. *)
     let position_key = (Tezos.sender, i_l, i_u) in
+    (* Grab existing position or create an empty one *)
+    let (position, is_new) = match (Big_map.find_opt position_key s.positions) with
+    | Some position -> (position, False)
+    | None -> ({liquidity = 0n ; fee_growth_inside = {x = 0n ; y = 0n} ; fee_growth_inside_last = {x = 0n; y = 0n}}, True) in
     (* Get accumulated fees for this position. *)
-    let fees = collect_fees position_key in
+    let fees = collect_fees s position_key in
+    (* Update liquidity of position. *)
+    let liquidity_new = assert_nat (position.liquidity + delta_liquidity) in
+    let position = {position with liquidity = liquidity_new} in
+    (* Reference counting the positions associated with a tick *)
+    let ticks = (if liquidity_new = 0n and then
+        if is_new then
+            ticks
+        else
+            let ticks = incr_n_positions ticks i_l (-1) in
+            let ticks = incr_n_positions ticks i_u (-1) in
+            ticks
+    else
+        if is_new then
+            let ticks = incr_n_positions ticks i_l (1) in
+            let ticks = incr_n_positions ticks i_u (1) in
+            ticks
+        else
+            ticks) in
+    let position_entry = if liquidity_new = 0n then None else Some {position with liquidity = liquidity_new} in
+    let positions = Big_map.update position_key position_entry s.positions in
+    (* Compute how much should be deposited / withdrawn to change liquidity by delta_liquidity * )
 
-    (* add delta_l to position *)
+    (* Add or remove liquidity above the current tick *)
+    let (s, delta) =
+    if s.i_c < i_l then
+        (s, {x = delta_liquidity  * (srp_u - srp_l) / (srp_l * srp_u) ; y = 0})
+    else if i_l <= s.i_c and s.i_c < i_u then
+        (* update interval we are in, if need be ... *)
+        let s = {s with i_l = if i_l > s.i_l then i_l else s.i_l ; liquidity = liquidity + delta_liquidity} in
+        (s, {x = delta_liquidity * (srp_u - srp) / (srp * srp_u) ; y = delta_liquidity * (srp - srp_l)})
+    else (* i_c >= i_u *)
+        (s, {x = 0 ; y = delta_liquidity ; y = delta_liquidity * (srp_u - srp_l)}) in
 
-
-
-
-
-
+    (* Collect fees to increase withdrawal or reduce required deposit. *)
+    let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in
+    let op_x = abc in (*FIXME*)
+    let op_y = def in (*FIXME*)
+    (* todo insert operations to deposit or withdraw approriate funds *)
+    ([op_x, op_y], {s with positions = positions; ticks = ticks})
 
 type result = storage * (operation list)
 
@@ -143,16 +186,27 @@ let x_to_y (s : storage) (dx : nat) : result =
     let dx_spent = dx - r.dx in
     let dy_received = r.dy in
     let s_new = {s with balance = {x = s.balance.x + dx_psent ;  y = assert_nat (s.balance.y - dy_received)}} in
-    let op_receive_x = abc in
-    let op_send_y = def in
+    let op_receive_x = abc in (*FIXME*)
+    let op_send_y = def in (*FIXME*)
     (s_new, [op_receive_x ; op_send_y])
+
+let y_to_x (s : storage) (dy : nat) : result =
+    (failwith "not implemented" : result)
+
+type set_position_param = {
+    i_l : tick_index ;
+    i_u : tick_index ;
+    i_l_l : tick_index ;
+    i_u_l : tick_index ;
+    delta_liquidity : int
+}
 
 type parameter =
 | X_to_Y of nat
 | Y_to_X of nat
-| Set_position of unit
+| Set_position of set_position_param
 
 let main ((s, p) : storage * parameter) : result = match parameter with
 | X_to_Y dx -> x_to_y s dx
-| Y_to_X dy -> y_to_x s dY
-| Set_position -> (failwith "moo" : result)
+| Y_to_X dy -> y_to_x s dy
+| Set_position p -> set_position p.i_l p.i_u p.i_l_l p.i_l_u p.delta_liquidity
