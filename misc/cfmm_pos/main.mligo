@@ -1,11 +1,24 @@
+#include "transfers.mligo"
+#include "math.mligo"
+
+(* FIXME: implement fixed point arithmetic for sqrt_price! *)
+(* TODO implement error strings as nat error codes *)
+
+
+[@inline] let const_infinity : nat = 4294967296n
+
 (* Some contract specific constants, to be edited per deployment
  todo implement burn [@inline] let const_ctez_burn_fee_bps : nat = 5n *)
-[@inline] let const_fee_bps : nat = 10n
-[@inline] let const_infinity : nat = 1000000000n
+
+[@inline] let const_fee_bps : nat = 10n  (* CHANGEME *)
+
 
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
 type nat_balance = {x : nat ; y : nat}
+type int_balance = {x : int ; y : int}
+
+(* Information stored for every initialized tick. *)
 type tick_state = {
     prev : tick_index ;
     next : tick_index ;
@@ -18,29 +31,30 @@ type tick_map = (tick_index, tick_state) big_map
 
 (* Position types, representing LP positions. *)
 type position_index = {owner : address ; lo : tick_index ; hi : tick_index}
-type position = {liquidity : nat ; fee_growth_inside : nat_balance ; fee_growth_inside_last : nat_balance}
-type position_map = (position_index, position) big_map
+type position_state = {liquidity : nat ; fee_growth_inside : nat_balance ; fee_growth_inside_last : nat_balance}
+type position_map = (position_index, position_state) big_map
 
 type storage = {
     liquidity : nat ; (* virtual liquidity, the value L for which the curve locally looks like x * y = L^2 *)
     sqrt_price : nat ; (* square root of the virtual price, the value P for which P = x / y *)
-    lo : tick_index ;
     i_c : int ;(* the highest tick corresponding to a price less than or equal to sqrt_price^2, does not necessarily corresponds to a boundary *)
+    lo : tick_index ; (* the highest initialized tick lower than or equal to i_c *)
     fee_growth : nat_balance ;
     balance : nat_balance ;
     ticks : tick_map ;
     positions : position_map ;
 }
 
+type result = storage * (operation list)
+
+(* Helper function to grab a tick we know exists in the tick indexed state. *)
 let get_tick (ticks : (tick_index, tick_state) big_map) (index: tick_index) : tick_state =
     match Big_map.find_opt tick_index ticks with
     | None -> failwith "Assertion error, tick should be initialized"
     | Some state -> state
 
-type x_to_y_rec_param = {
-    s : storage ;
-    dx : nat ;
-    dy : nat}
+
+type x_to_y_rec_param = {s : storage ; dx : nat ; dy : nat}
 
 (* Helper function for x_to_y, recursively loops over ticks to execute a trade. *)
 let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
@@ -94,6 +108,24 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
             let p_new = {p with s = s_new ; dx = assert_nat (p.dx - dx_consummed) ; dy = p.dy + dy} in
             x_to_y_rec p_new
 
+(* Trade up to a quantity dx of asset x, receives dy *)
+let x_to_y (s : storage) (p : x_to_y_param) : result =
+    if Tezos.now > deadline then
+        (failwith "Past deadline" : result)
+    else
+        let r = x_to_y_rec {s = s ; dx = p.dx ; dy = 0n} in
+        let dx_spent = dx - r.dx in
+        let dy_received = r.dy in
+        let s_new = {s with balance = {x = s.balance.x + dx_psent ;  y = assert_nat (s.balance.y - dy_received)}} in
+        if dy_received < p.min_dy then
+            (failwith "dy received < min_dy" : result)
+        else
+            let op_receive_x = x_transfer Tezos.sender Tezos.self_address dx_spent in
+            let op_send_y = y_transfer Tezos.self_address to_ dy_received in
+            ([op_receive_x ; op_send_y], s_new)
+
+let y_to_x (s : storage) (dy : nat) : result =
+    (failwith "not implemented" : result)
 
 let rec initialize_tick ((ticks, i, i_l, initial_fee_growth_outside) : tick_map * tick_index * tick_index * nat_balance) : tick_map =
     if Big_map.mem i ticks then
@@ -173,26 +205,20 @@ let set_position (s : storage) (i_l : nat) (i_u : nat) (i_l_l : nat) (i_u_l : na
 
     (* Collect fees to increase withdrawal or reduce required deposit. *)
     let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in
-    let op_x = abc in (*FIXME*)
-    let op_y = def in (*FIXME*)
-    (* todo insert operations to deposit or withdraw approriate funds *)
+
+    let op_x = if delta.x > 0 then
+        x_transfer Tezos.sender Tezos.self_address delta.x
+    else
+        x_transfer Tezos.self_address to_ delta.x in
+
+    let op_y = if delta.x > 0 then
+        y_transfer Tezos.sender Tezos.self_address delta.y
+    else
+        y_transfer Tezos.self_address to_ delta.y in
+
     ([op_x, op_y], {s with positions = positions; ticks = ticks})
 
-type result = storage * (operation list)
-
-(* Trade up to a quantity dx of asset x, receives dy *)
-let x_to_y (s : storage) (dx : nat) : result =
-    let r = x_to_y_rec {s = s ; dx = dx ; dy = 0n} in
-    let dx_spent = dx - r.dx in
-    let dy_received = r.dy in
-    let s_new = {s with balance = {x = s.balance.x + dx_psent ;  y = assert_nat (s.balance.y - dy_received)}} in
-    let op_receive_x = abc in (*FIXME*)
-    let op_send_y = def in (*FIXME*)
-    (s_new, [op_receive_x ; op_send_y])
-
-let y_to_x (s : storage) (dy : nat) : result =
-    (failwith "not implemented" : result)
-
+(* Entrypoints types *)
 type set_position_param = {
     i_l : tick_index ;
     i_u : tick_index ;
@@ -201,12 +227,28 @@ type set_position_param = {
     delta_liquidity : int
 }
 
+type x_to_y_param = {
+    dx : nat ;
+    deadline : timestamp ;
+    min_dy : nat ;
+    to_ : address ; (* Recipient of dy *)
+}
+
+type y_to_x_param = {
+    dy : nat ;
+    deadline : timestamp ;
+    min_dx : nat ;
+    to_ : address ; (* Recipient of dy *)
+}
+
 type parameter =
-| X_to_Y of nat
+| X_to_Y of x_to_y_param (* TODO add deadline and minimum token bought. *)
 | Y_to_X of nat
-| Set_position of set_position_param
+| Set_position of set_position_param (* TODO add deadline, maximum tokens contributed, and maximum liquidity present *)
+| X_to_X_prime of address (* equivalent to token_to_token *)
 
 let main ((s, p) : storage * parameter) : result = match parameter with
 | X_to_Y dx -> x_to_y s dx
 | Y_to_X dy -> y_to_x s dy
 | Set_position p -> set_position p.i_l p.i_u p.i_l_l p.i_l_u p.delta_liquidity
+| X_to_X_prime -> (failwith "not implemented" : result) (*TODO implement*)
