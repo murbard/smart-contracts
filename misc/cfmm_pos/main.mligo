@@ -5,7 +5,7 @@
 (* TODO implement error strings as nat error codes *)
 
 
-[@inline] let const_infinity : nat = 4294967296n
+[@inline] let const_max_tick : nat = 1048575n
 
 (* Some contract specific constants, to be edited per deployment
  todo implement burn [@inline] let const_ctez_burn_fee_bps : nat = 5n *)
@@ -27,6 +27,28 @@ type tick_state = {
     fee_growth_outside : balance_nat ;
     sqrt_price : nat
 }
+
+(* Useful for initial state, TODO, move out of this file *)
+let max_tick_state = {
+    prev = {i=-const_max_tick} ;
+    next = {i=int(const_max_tick)} ;
+    delta_liquidity = 0 ;
+    n_positions = 1n ; (* prevents garbage collection *)
+    fee_growth_outside = {x = 0n ; y = 0n} ;
+    sqrt_price = 71107673757466966990985105047137336834554167630n ; (* Round[Exp[5/100000*(2^20-1)]*2^80] *)
+} (* TODO consider using 2^90 precision instead so that every tick has a distinct sqrt_price *)
+
+let min_tick_state = {
+    prev = {i=-const_max_tick} ;
+    next = {i=int(const_max_tick)} ;
+    delta_liquidity = 0 ;
+    n_positions = 1n ; (* prevents garbage collection *)
+    fee_growth_outside = {x = 0n ; y = 0n} ;
+    sqrt_price = 21n ; (* Round[Exp[-5/100000*(2^20-1)]*2^80] *)
+}
+
+(* </initial_state> *)
+
 type tick_map = (tick_index, tick_state) big_map
 
 (* Position types, representing LP positions. *)
@@ -44,6 +66,7 @@ type storage = {
     ticks : tick_map ;
     positions : position_map ;
 }
+
 
 
 (* Entrypoints types *)
@@ -80,6 +103,13 @@ let get_tick (ticks : (tick_index, tick_state) big_map) (index: tick_index) : ti
     | Some state -> state
 
 
+let sqrt_price_move (liquidity : nat) (sqrt_price : nat) (dx : nat) =
+    (* floordiv because we want to overstate how much this trade lowers the price *)
+    floordiv
+        (Bitwise.shift_left (liquidity * sqrt_price) 80n)
+        ((Bitwise.shift_left liquidity 80n) + dx * sqrt_price)
+
+
 type x_to_y_rec_param = {s : storage ; dx : nat ; dy : nat}
 
 (* Helper function for x_to_y, recursively loops over ticks to execute a trade. *)
@@ -90,12 +120,12 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
         (* The fee that would be extracted from selling dx. *)
         let fee  = ceildiv (p.dx * const_fee_bps) 10000n in
         (* The what the new price will be, assuming it's within the current tick. *)
-        let sqrt_price_new = floordiv (p.s.liquidity * p.s.sqrt_price) (p.s.liquidity + (assert_nat (p.dx - fee)) * p.s.sqrt_price) in (* FIXME arithmetic *)
+        let sqrt_price_new = sqrt_price_move p.s.liquidity p.s.sqrt_price (assert_nat (p.dx - fee)) in
         (* What the new value of ic will be. *)
-        let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in (* FIXME arithmetic *)
+        let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in
         if i_c_new >= p.s.lo.i then
             (* The trade did not push us past the current tick. *)
-            let dy = (assert_nat (p.s.sqrt_price - sqrt_price_new)) * p.s.liquidity in (* FIXME arithmetic *)
+            let dy = Bitwise.shift_right ((assert_nat (p.s.sqrt_price - sqrt_price_new)) * p.s.liquidity) 80n in
             let s_new = {p.s with
                 sqrt_price = sqrt_price_new ;
                 i_c = i_c_new ;
@@ -110,14 +140,14 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
             (* The cached price corresponding to lo. *)
             let sqrt_price_new = tick.sqrt_price in
             (* How much dY will we receive for going all the way to lo. *)
-            let dy = p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new)) in (* FIXME arithmetic *)
+            let dy = Bitwise.shift_right (p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new))) 80n in
             (* How much dX does that correspond to. *)
-            let dx_for_dy = ceildiv dy (p.s.sqrt_price * sqrt_price_new) in (* FIXME arithmetic *)
+            let dx_for_dy = ceildiv (Bitwise.shift_left dy 160n) (p.s.sqrt_price * sqrt_price_new) in
             (* We will have to consumme more dx than that because a fee will be applied. *)
             let dx_consummed = ceildiv (dx_for_dy * 10000n) const_one_minus_fee_bps in
             (* Deduct the fee we will actually be paying. *)
             let fee = assert_nat (dx_consummed - dx_for_dy) in
-            let fee_growth_x_new = p.s.fee_growth.x + (floordiv fee p.s.liquidity) in (* FIXME arithmetic *)
+            let fee_growth_x_new = p.s.fee_growth.x + (floordiv (Bitwise.shift_left fee 128n) p.s.liquidity) in
             (* Flip fee growth. *)
             let fee_growth_outside_new = {tick.fee_growth_outside with x = assert_nat (fee_growth_x_new - tick.fee_growth_outside.x)} in
             let fee_growth_new = {p.s.fee_growth with x=fee_growth_x_new} in
