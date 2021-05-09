@@ -225,8 +225,31 @@ let incr_n_positions (ticks : tick_map) (i : tick_index) (incr : int) =
     else
         Big_map.update i (Some {tick with n_positions = n_pos}) ticks
 
-let collect_fees (s : storage) (key : position_index) : balance_nat =
-    (failwith "not implemented" : balance_nat)
+let collect_fees (s : storage) (key : position_index) : storage * balance_nat =
+    let position = match Big_map.find_opt key s.positions with
+    | None -> (failwith "position does not exist" : position_state)
+    | Some position -> position in
+    let tick_lo = get_tick s.ticks key.lo in
+    let tick_hi = get_tick s.ticks key.hi in
+    let f_a = if s.i_c >= key.hi.i then
+        { x = assert_nat (s.fee_growth.x - tick_hi.fee_growth_outside.x);
+          y = assert_nat (s.fee_growth.y - tick_hi.fee_growth_outside.y)}
+    else
+        tick_hi.fee_growth_outside in
+    let f_b = if s.i_c >= key.lo.i then
+        tick_lo.fee_growth_outside
+    else
+        { x = assert_nat (s.fee_growth.x - tick_lo.fee_growth_outside.x) ;
+          y = assert_nat (s.fee_growth.y - tick_lo.fee_growth_outside.y) } in
+    let fee_growth_inside = {
+        x = assert_nat (s.fee_growth.x - f_a.x - f_b.x) ;
+        y = assert_nat (s.fee_growth.y - f_a.y - f_b.y) } in
+    let fees = {
+        x = (assert_nat (fee_growth_inside.x - position.fee_growth_inside_last.x)) * position.liquidity ;
+        y = (assert_nat (fee_growth_inside.y - position.fee_growth_inside_last.y)) * position.liquidity } in
+    let position = {position with fee_growth_inside_last = fee_growth_inside} in
+    let positions = Big_map.update key (Some position) s.positions in
+    ({s with positions = positions}, fees)
 
 
 let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : tick_index) (i_u_l : tick_index) (delta_liquidity : int) (to_x : address) (to_y : address) : result =
@@ -241,7 +264,7 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
     | Some position -> (position, false)
     | None -> ({liquidity = 0n ; fee_growth_inside = {x = 0n ; y = 0n} ; fee_growth_inside_last = {x = 0n; y = 0n}}, true) in
     (* Get accumulated fees for this position. *)
-    let fees = collect_fees s position_key in
+    let s, fees = collect_fees s position_key in
     (* Update liquidity of position. *)
     let liquidity_new = assert_nat (position.liquidity + delta_liquidity) in
     let position = {position with liquidity = liquidity_new} in

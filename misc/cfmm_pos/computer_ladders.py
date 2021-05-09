@@ -42,3 +42,5 @@ for b in b_range:
     err_product *= (Integer(1) + err)
 
 check_err_product(err_product)
+
+# todo, assertions to show that ticks 1-2^20 and 2-2^20 have distinct sqrt_price
