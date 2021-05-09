@@ -1,7 +1,6 @@
 #include "transfers.mligo"
 #include "math.mligo"
 
-(* FIXME: implement fixed point arithmetic for sqrt_price! *)
 (* TODO implement error strings as nat error codes *)
 
 
@@ -10,8 +9,10 @@
 (* Some contract specific constants, to be edited per deployment
  todo implement burn [@inline] let const_ctez_burn_fee_bps : nat = 5n *)
 
-[@inline] let const_fee_bps : nat = 10n  (* CHANGEME *)
-[@inline] let const_one_minus_fee_bps : nat = 9990n (* CHANGEME *)
+(* Invariant : const_fee_bps + const_one_minus_fee_bps = 10000n *)
+[@inline] let const_fee_bps : nat = 10n  (* CHANGEME if need be *)
+[@inline] let const_one_minus_fee_bps : nat = 9990n (* CHANGEME if need be*)
+
 
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
@@ -266,20 +267,29 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
     let positions = Big_map.update position_key position_entry s.positions in
     (* Compute how much should be deposited / withdrawn to change liquidity by delta_liquidity *)
 
-    let srp_u = 42n in let srp_l = 42n in  (*FIXME get actual prices from the tick map *)
+    (* Grab cached prices for the interval *)
+    let tick_u = get_tick ticks i_u in
+    let tick_l = get_tick ticks i_l in
+    let srp_u = tick_u.sqrt_price in
+    let srp_l = tick_l.sqrt_price in
+
     (* Add or remove liquidity above the current tick *)
     let (s, delta) =
     if s.i_c < i_l.i then
-        (s, {x = delta_liquidity * (srp_u - srp_l) / (int (srp_l * srp_u)) ; y = 0}) (* FIXME arithmetic + pick stingy rounding *)
+        (s, {
+            (* If I'm adding liquidity, x will be positive, I want to overestimate it, if x I'm taking away
+                liquidity, I want to to underestimate what I'm receiving. *)
+            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - srp_l)) 80n))) (int (srp_l * srp_u)) ;
+            y = 0})
     else if i_l.i <= s.i_c && s.i_c < i_u.i then
         (* update interval we are in, if need be ... *)
         let s = {s with lo = if i_l.i > s.lo.i then i_l else s.lo ; liquidity = assert_nat (s.liquidity + delta_liquidity)} in
         (s, {
-            x = (delta_liquidity * (srp_u - s.sqrt_price)) / (int (s.sqrt_price * srp_u)) ;
-            y =  delta_liquidity * (s.sqrt_price - srp_l)
-            }) (* FIXME arithmetic + pick stingy rounding  *)
+            x = ceildiv_int (delta_liquidity * (Bitwise.shift_left (assert_nat (srp_u - s.sqrt_price) 80n))) (int (s.sqrt_price * srp_u)) ;
+            y = delta_liquidity * (s.sqrt_price - srp_l) (*FIXME shift by 80 bits *)
+            })
     else (* i_c >= i_u *)
-        (s, {x = 0 ; y = delta_liquidity * ( (srp_u - srp_l))}) in (* FIXME arithmetic *)
+        (s, {x = 0 ; y = delta_liquidity * ( (srp_u - srp_l))}) in (*FIXME shift by 80 bits *)
 
     (* Collect fees to increase withdrawal or reduce required deposit. *)
     let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in

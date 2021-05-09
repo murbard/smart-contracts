@@ -4,6 +4,7 @@ type fixed_point = { v : nat ; offset : int }
     { v = a.v * b.v ; offset = a.offset + b.offset }
 
 let ceildiv (numerator : nat) (denominator : nat) : nat = abs ((- numerator) / (int denominator))
+let ceildiv_int (numerator : int) (denominator : int) : int = - ((- numerator) /  denominator)
 let floordiv (numerator : nat) (denominator : nat) : nat =  numerator / denominator
 
 (* accurate for x/y in [0.7, 1.5] *)
@@ -81,7 +82,7 @@ let rec half_bps_pow_rec ((tick, acc, ladder) : nat * fixed_point * (fixed_point
         | h :: t -> half_bps_pow_rec (half, (if rem = 0n then acc else fixed_point_mul h acc), t)
 
 (* TODO, there are only 2 million ticks, use model checking to verify this function *)
-let half_bps_pow (tick : int) : nat=
+let half_bps_pow (tick : int) : nat =
     let product = half_bps_pow_rec (abs tick, {v=0n;offset=0}, (if tick > 0  then positive_ladder  else negative_ladder)) in
     let doffset = -80 - product.offset in
     if doffset > 0 then
