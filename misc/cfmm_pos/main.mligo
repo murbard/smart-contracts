@@ -13,7 +13,6 @@
 [@inline] let const_fee_bps : nat = 10n  (* CHANGEME if need be *)
 [@inline] let const_one_minus_fee_bps : nat = 9990n (* CHANGEME if need be*)
 
-
 (* Tick types, representing pieces of the curve offered between different tick segments. *)
 type tick_index = {i : int}
 type balance_nat = {x : nat ; y : nat}
@@ -67,8 +66,6 @@ type storage = {
     ticks : tick_map ;
     positions : position_map ;
 }
-
-
 
 (* Entrypoints types *)
 type set_position_param = {
@@ -285,11 +282,11 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
         (* update interval we are in, if need be ... *)
         let s = {s with lo = if i_l.i > s.lo.i then i_l else s.lo ; liquidity = assert_nat (s.liquidity + delta_liquidity)} in
         (s, {
-            x = ceildiv_int (delta_liquidity * (Bitwise.shift_left (assert_nat (srp_u - s.sqrt_price) 80n))) (int (s.sqrt_price * srp_u)) ;
-            y = delta_liquidity * (s.sqrt_price - srp_l) (*FIXME shift by 80 bits *)
+            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - s.sqrt_price)) 80n))) (int (s.sqrt_price * srp_u)) ;
+            y = shift_int (delta_liquidity * (s.sqrt_price - srp_l)) (-80)
             })
     else (* i_c >= i_u *)
-        (s, {x = 0 ; y = delta_liquidity * ( (srp_u - srp_l))}) in (*FIXME shift by 80 bits *)
+        (s, {x = 0 ; y = shift_int (delta_liquidity * (srp_u - srp_l)) (-80) }) in
 
     (* Collect fees to increase withdrawal or reduce required deposit. *)
     let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in

@@ -19,6 +19,9 @@ let floor_log_half_bps ((x, y) : nat * nat) : int =
         let denom = 2n * (x_plus_y * x_plus_y + 2n * x * y) in
         num / (int denom)
 
+let shift_int (x : int) (n : int): int =
+    (if x < 0 then -1 else 1) * (int (if n > 0 then Bitwise.shift_left (abs x) (abs n) else Bitwise.shift_right (abs x) (abs n)))
+
 
 let assert_nat (x : int) : nat =
     match is_nat x with
