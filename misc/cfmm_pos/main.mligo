@@ -182,10 +182,20 @@ let rec initialize_tick ((ticks, i, i_l, initial_fee_growth_outside) : tick_map 
 let incr_n_positions (ticks : tick_map) (i : tick_index) (incr : int) =
     let tick = get_tick ticks i in
     let n_pos = assert_nat (tick.n_positions + incr) in
-    let tick_option : tick_state option = if n_pos = 0n then None else Some {tick with n_positions = n_pos} in
-    (*FIXME, repair linked list if tick is uninitialized removed *)
-    Big_map.update i tick_option ticks
-
+    if n_pos = 0n then
+        (*  Garbage collect the tick.
+            The largest and smallest tick are initialized with n_positions = 1 so they cannot
+            be accidentally garbage collected. *)
+        let prev = get_tick ticks tick.prev in
+        let next = get_tick ticks tick.next in
+        let prev = {prev with next = tick.next} in
+        let next = {next with prev = tick.prev} in
+        let ticks = Big_map.update i (None : tick_state option) ticks in
+        let ticks = Big_map.update tick.prev (Some prev) ticks in
+        let ticks = Big_map.update tick.next (Some next) ticks in
+        ticks
+    else
+        Big_map.update i (Some {tick with n_positions = n_pos}) ticks
 
 let collect_fees (s : storage) (key : position_index) : balance_nat =
     (failwith "not implemented" : balance_nat)
