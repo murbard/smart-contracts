@@ -52,7 +52,9 @@ type set_position_param = {
     i_u : tick_index ;
     i_l_l : tick_index ;
     i_u_l : tick_index ;
-    delta_liquidity : int
+    delta_liquidity : int ;
+    to_x : address ;
+    to_y : address ;
 }
 
 type x_to_y_param = {
@@ -189,7 +191,7 @@ let collect_fees (s : storage) (key : position_index) : balance_nat =
     (failwith "not implemented" : balance_nat)
 
 
-let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : tick_index) (i_u_l : tick_index) (delta_liquidity : int) : result =
+let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : tick_index) (i_u_l : tick_index) (delta_liquidity : int) (to_x : address) (to_y : address) : result =
     (* Initialize ticks if need be. *)
     let ticks = s.ticks in
     let ticks = initialize_tick (ticks, i_l, i_l_l, (if s.i_c >= i_l.i then s.fee_growth else {x = 0n ; y = 0n})) in
@@ -228,28 +230,31 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
     (* Add or remove liquidity above the current tick *)
     let (s, delta) =
     if s.i_c < i_l.i then
-        (s, {x = delta_liquidity * (srp_u - srp_l) / (srp_l * srp_u) ; y = 0}) (* FIXME arithmetic + pick stingy rounding *)
+        (s, {x = delta_liquidity * (srp_u - srp_l) / (int (srp_l * srp_u)) ; y = 0}) (* FIXME arithmetic + pick stingy rounding *)
     else if i_l.i <= s.i_c && s.i_c < i_u.i then
         (* update interval we are in, if need be ... *)
         let s = {s with lo = if i_l.i > s.lo.i then i_l else s.lo ; liquidity = assert_nat (s.liquidity + delta_liquidity)} in
-        (s, {x = delta_liquidity * (srp_u - s.sqrt_price) / (s.sqrt_price * srp_u) ; y = delta_liquidity * (s.sqrt_price - srp_l)}) (* FIXME arithmetic + pick stingy rounding  *)
+        (s, {
+            x = (delta_liquidity * (srp_u - s.sqrt_price)) / (int (s.sqrt_price * srp_u)) ;
+            y =  delta_liquidity * (s.sqrt_price - srp_l)
+            }) (* FIXME arithmetic + pick stingy rounding  *)
     else (* i_c >= i_u *)
-        (s, {x = 0 ; y = delta_liquidity ; y = delta_liquidity * (srp_u - srp_l)}) in (* FIXME arithmetic *)
+        (s, {x = 0 ; y = delta_liquidity * ( (srp_u - srp_l))}) in (* FIXME arithmetic *)
 
     (* Collect fees to increase withdrawal or reduce required deposit. *)
     let delta = {x = delta.x - fees.x ; y = delta.y - fees.y} in
 
     let op_x = if delta.x > 0 then
-        x_transfer Tezos.sender Tezos.self_address delta.x
+        x_transfer Tezos.sender Tezos.self_address (abs delta.x)
     else
-        x_transfer Tezos.self_address to_ delta.x in
+        x_transfer Tezos.self_address to_x (abs delta.x) in
 
-    let op_y = if delta.x > 0 then
-        y_transfer Tezos.sender Tezos.self_address delta.y
+    let op_y = if delta.y > 0 then
+        y_transfer Tezos.sender Tezos.self_address (abs delta.y)
     else
-        y_transfer Tezos.self_address to_ delta.y in
+        y_transfer Tezos.self_address to_y (abs delta.y) in
 
-    ([op_x, op_y], {s with positions = positions; ticks = ticks})
+    ([op_x ; op_y], {s with positions = positions; ticks = ticks})
 
 type parameter =
 | X_to_Y of x_to_y_param (* TODO add deadline and minimum token bought. *)
@@ -257,8 +262,8 @@ type parameter =
 | Set_position of set_position_param (* TODO add deadline, maximum tokens contributed, and maximum liquidity present *)
 | X_to_X_prime of address (* equivalent to token_to_token *)
 
-let main ((s, p) : storage * parameter) : result = match parameter with
+let main ((p, s) : parameter * storage) : result = match p with
 | X_to_Y dx -> x_to_y s dx
 | Y_to_X dy -> y_to_x s dy
-| Set_position p -> set_position p.i_l p.i_u p.i_l_l p.i_l_u p.delta_liquidity
+| Set_position p -> set_position s p.i_l p.i_u p.i_l_l p.i_u_l p.delta_liquidity p.to_x p.to_y
 | X_to_X_prime -> (failwith "not implemented" : result) (*TODO implement*)
