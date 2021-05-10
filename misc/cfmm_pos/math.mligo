@@ -1,3 +1,7 @@
+#if MATH_MLIGO
+#else
+#define MATH_MLIGO
+
 type fixed_point = { v : nat ; offset : int }
 
 [@inline] let fixed_point_mul (a : fixed_point) (b : fixed_point) : fixed_point =
@@ -125,3 +129,4 @@ This ensures that the tick index can be matched to a square root price with over
 
 *)
 
+#endif
