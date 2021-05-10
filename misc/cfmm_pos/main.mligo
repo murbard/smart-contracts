@@ -104,8 +104,8 @@ let get_tick (ticks : (tick_index, tick_state) big_map) (index: tick_index) : ti
 let sqrt_price_move (liquidity : nat) (sqrt_price : nat) (dx : nat) =
     (* floordiv because we want to overstate how much this trade lowers the price *)
     floordiv
-        (Bitwise.shift_left (liquidity * sqrt_price) 80n)
-        ((Bitwise.shift_left liquidity 80n) + dx * sqrt_price)
+        (Bitwise.shift_left (liquidity * sqrt_price) 90n)
+        ((Bitwise.shift_left liquidity 90n) + dx * sqrt_price)
 
 
 type x_to_y_rec_param = {s : storage ; dx : nat ; dy : nat}
@@ -123,7 +123,7 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
         let i_c_new = p.s.i_c + floor_log_half_bps(sqrt_price_new, p.s.sqrt_price) in
         if i_c_new >= p.s.lo.i then
             (* The trade did not push us past the current tick. *)
-            let dy = Bitwise.shift_right ((assert_nat (p.s.sqrt_price - sqrt_price_new)) * p.s.liquidity) 80n in
+            let dy = Bitwise.shift_right ((assert_nat (p.s.sqrt_price - sqrt_price_new)) * p.s.liquidity) 90n in
             let s_new = {p.s with
                 sqrt_price = sqrt_price_new ;
                 i_c = i_c_new ;
@@ -138,9 +138,9 @@ let rec x_to_y_rec (p : x_to_y_rec_param) : x_to_y_rec_param =
             (* The cached price corresponding to lo. *)
             let sqrt_price_new = tick.sqrt_price in
             (* How much dY will we receive for going all the way to lo. *)
-            let dy = Bitwise.shift_right (p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new))) 80n in
+            let dy = Bitwise.shift_right (p.s.liquidity * (assert_nat (p.s.sqrt_price - sqrt_price_new))) 90n in
             (* How much dX does that correspond to. *)
-            let dx_for_dy = ceildiv (Bitwise.shift_left dy 160n) (p.s.sqrt_price * sqrt_price_new) in
+            let dx_for_dy = ceildiv (Bitwise.shift_left dy 180n) (p.s.sqrt_price * sqrt_price_new) in
             (* We will have to consumme more dx than that because a fee will be applied. *)
             let dx_consummed = ceildiv (dx_for_dy * 10000n) const_one_minus_fee_bps in
             (* Deduct the fee we will actually be paying. *)
@@ -245,8 +245,8 @@ let collect_fees (s : storage) (key : position_index) : storage * balance_nat =
         x = assert_nat (s.fee_growth.x - f_a.x - f_b.x) ;
         y = assert_nat (s.fee_growth.y - f_a.y - f_b.y) } in
     let fees = {
-        x = (assert_nat (fee_growth_inside.x - position.fee_growth_inside_last.x)) * position.liquidity ;
-        y = (assert_nat (fee_growth_inside.y - position.fee_growth_inside_last.y)) * position.liquidity } in
+        x = Bitwise.shift_right ((assert_nat (fee_growth_inside.x - position.fee_growth_inside_last.x)) * position.liquidity) 128;
+        y = Bitwise.shift_right ((assert_nat (fee_growth_inside.y - position.fee_growth_inside_last.y)) * position.liquidity) 128} in
     let position = {position with fee_growth_inside_last = fee_growth_inside} in
     let positions = Big_map.update key (Some position) s.positions in
     ({s with positions = positions}, fees)
@@ -299,13 +299,13 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
         (s, {
             (* If I'm adding liquidity, x will be positive, I want to overestimate it, if x I'm taking away
                 liquidity, I want to to underestimate what I'm receiving. *)
-            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - srp_l)) 80n))) (int (srp_l * srp_u)) ;
+            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - srp_l)) 90n))) (int (srp_l * srp_u)) ;
             y = 0})
     else if i_l.i <= s.i_c && s.i_c < i_u.i then
         (* update interval we are in, if need be ... *)
         let s = {s with lo = if i_l.i > s.lo.i then i_l else s.lo ; liquidity = assert_nat (s.liquidity + delta_liquidity)} in
         (s, {
-            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - s.sqrt_price)) 80n))) (int (s.sqrt_price * srp_u)) ;
+            x = ceildiv_int (delta_liquidity * (int (Bitwise.shift_left (assert_nat (srp_u - s.sqrt_price)) 90n))) (int (s.sqrt_price * srp_u)) ;
             y = shift_int (delta_liquidity * (s.sqrt_price - srp_l)) (-80)
             })
     else (* i_c >= i_u *)
@@ -327,7 +327,7 @@ let set_position (s : storage) (i_l : tick_index) (i_u : tick_index) (i_l_l : ti
     ([op_x ; op_y], {s with positions = positions; ticks = ticks})
 
 type parameter =
-| X_to_Y of x_to_y_param (* TODO add deadline and minimum token bought. *)
+| X_to_Y of x_to_y_param
 | Y_to_X of nat
 | Set_position of set_position_param (* TODO add deadline, maximum tokens contributed, and maximum liquidity present *)
 | X_to_X_prime of address (* equivalent to token_to_token *)

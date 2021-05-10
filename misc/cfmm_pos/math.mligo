@@ -84,7 +84,6 @@ let rec half_bps_pow_rec ((tick, acc, ladder) : nat * fixed_point * (fixed_point
         | [] -> (failwith "should not reach end of ladder" : fixed_point)
         | h :: t -> half_bps_pow_rec (half, (if rem = 0n then acc else fixed_point_mul h acc), t)
 
-(* TODO, there are only 2 million ticks, use model checking to verify this function *)
 let half_bps_pow (tick : int) : nat =
     let product = half_bps_pow_rec (abs tick, {v=0n;offset=0}, (if tick > 0  then positive_ladder  else negative_ladder)) in
     let doffset = -80 - product.offset in
@@ -92,7 +91,7 @@ let half_bps_pow (tick : int) : nat =
         Bitwise.shift_right product.v (abs doffset)
     else
         (* This branch should almost never happen, in general the price we get is not a round number. *)
-        Bitwise.shift_left product.v (abs doffset) (*TODO, do we need to round when we divide here? *)
+        Bitwise.shift_left product.v (abs doffset)
 
 
 (* ladder explanation
