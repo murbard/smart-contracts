@@ -94,13 +94,10 @@ for tick in list(range(-2**20+1,2**20))[-1::-1]:
     try:
         a = half_bps_pow(tick)
         b = round(half_bps_exact_pow(tick) * (Integer(2)**Integer(precision_desired)))
-        assert (abs(a-b) <= 1) # we're off by at most 1
+        assert (abs(a-b) <= 1) # we're off by at most 1, this is probably overkill
         assert (a < last_a) # the sequence is strictly decreasing
     except Exception as e:
         print(tick,a,b)
         print(e)
         exit()
     last_a = a
-
-# -194032
-# 49086
