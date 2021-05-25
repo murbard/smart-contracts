@@ -1,4 +1,5 @@
-parameter (or (unit %default)
+parameter %root
+          (or (unit %default)
               (pair %main
                  (pair :payload
                     (nat %counter) # counter, used to prevent replay attacks
