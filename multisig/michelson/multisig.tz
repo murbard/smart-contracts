@@ -80,5 +80,17 @@ code
                   SET_DELEGATE ; CONS }
                 {
                   # Change set of signatures
+
+                  # Sanity check threshold/key pair
+                  DUP;
+                  DIP {
+                        UNPAIR;
+
+                        # Check threshold is not zero
+                        DUP; INT; ASSERT_NEQ;
+
+                        # Check threshold less then or equal to number of keys
+                        DIP { SIZE } ; ASSERT_CMPLE; };
+
                   DIP { SWAP ; CAR } ; SWAP ; PAIR ; SWAP }} ;
     PAIR }
