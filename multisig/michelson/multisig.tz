@@ -29,7 +29,7 @@ code
 
     # Check that the counters match
     UNPAIR @stored_counter; DIP { SWAP };
-    ASSERT_CMPEQ ;
+    IFCMPEQ {} {PUSH string "Counter doesn't match"; FAILWITH} ;
 
     # Compute the number of valid signatures
     DIP { SWAP } ; UNPAIR @threshold @keys;
@@ -48,7 +48,8 @@ code
                       {
                         SWAP ; DIIP { DUUP } ;
                         # Checks signatures, fails if invalid
-                        CHECK_SIGNATURE ; ASSERT ;
+                        CHECK_SIGNATURE ;
+                        IF {} {PUSH string "Invalid signature"; FAILWITH} ;
                         PUSH nat 1 ; ADD @valid } }
                   { SWAP ; DROP }
               }
@@ -56,14 +57,14 @@ code
                 # There were fewer signatures in the list
                 # than keys. Not all signatures must be present, but
                 # they should be marked as absent using the option type.
-                FAIL
+                PUSH string "Fewer signatures than keys"; FAILWITH
               } ;
             SWAP
           }
       } ;
     # Assert that the threshold is less than or equal to the
     # number of valid signatures.
-    ASSERT_CMPLE ;
+    IFCMPLE {} {PUSH string "Insufficient signatures"; FAILWITH} ;
     DROP ; DROP ;
 
     # Increment counter and place in storage
